@@ -64,6 +64,8 @@ public class CustomCertSignValidator {
         } catch (SignatureException e) {
             if (e.getMessage().contains("Signature length not correct")) {
                 verifyWithPKCS1Padding(childCertificate, certificate);
+            } else {
+                throw e;
             }
         }
 
