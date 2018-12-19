@@ -33,7 +33,7 @@ public class CustomCertSignValidator {
     }
 
     /**
-     * Verifies that the public key in the first certificate is used to encrypt the second certificate.
+     * Verifies that the childCertificate was signed using the private key that corresponds to the certificate public key.
      *
      * Try to verify the signature with the standard algorithm.
      * If that doesn't succeed, the signature is verified with PKCS1 padding.
@@ -72,7 +72,7 @@ public class CustomCertSignValidator {
     }
 
     public static void verifyWithPKCS1Padding(X509Certificate childCertificate, X509Certificate certificate) throws NoSuchAlgorithmException, InvalidKeyException, SignatureException, CertificateException, NoSuchProviderException {
-        LOG.debug("Signature lenth is not correct for childCertificate (" + childCertificate.getSubjectDN().getName() + "), and certificate (" + certificate.getSubjectDN().getName() + ").");
+        LOG.debug("Signature length is not correct for childCertificate (" + childCertificate.getSubjectDN().getName() + "), and certificate (" + certificate.getSubjectDN().getName() + ").");
         String certificateSignatureAlgorithm = childCertificate.getSigAlgName();
         if (!certificateSignatureAlgorithm.contains("Encryption")) {
             certificateSignatureAlgorithm = certificateSignatureAlgorithm + "Encryption";
