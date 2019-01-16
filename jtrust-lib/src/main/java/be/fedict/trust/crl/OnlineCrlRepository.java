@@ -31,8 +31,6 @@ import java.security.cert.X509CRL;
 import java.security.cert.X509Certificate;
 import java.util.Date;
 
-import be.fedict.trust.ServerNotAvailableException;
-import be.fedict.trust.ServerType;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.http.HttpEntity;
@@ -45,6 +43,8 @@ import org.apache.http.impl.client.DefaultHttpClient;
 
 import be.fedict.trust.Credentials;
 import be.fedict.trust.NetworkConfig;
+import be.fedict.trust.ServerNotAvailableException;
+import be.fedict.trust.ServerType;
 
 /**
  * Online CRL repository. This CRL repository implementation will download the
@@ -123,7 +123,7 @@ public class OnlineCrlRepository implements CrlRepository {
 			httpResponse = httpClient.execute(httpGet);
 			final StatusLine statusLine = httpResponse.getStatusLine();
 			statusCode = statusLine.getStatusCode();
-		} catch (IOException e) {
+		} catch (final IOException e) {
 			throw new ServerNotAvailableException("CRL server is down", ServerType.CRL, e);
 		}
 

@@ -1,7 +1,7 @@
 /*
  * Java Trust Project.
  * Copyright (C) 2009 FedICT.
- * Copyright (C) 2014 e-Contract.be BVBA.
+ * Copyright (C) 2014-2018 e-Contract.be BVBA.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -29,7 +29,6 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 
-import be.fedict.trust.ServerNotAvailableException;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -59,6 +58,7 @@ import org.bouncycastle.operator.jcajce.JcaContentVerifierProviderBuilder;
 import org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder;
 import org.joda.time.DateTime;
 
+import be.fedict.trust.ServerNotAvailableException;
 import be.fedict.trust.linker.PublicKeyTrustLinker;
 import be.fedict.trust.linker.TrustLinker;
 import be.fedict.trust.linker.TrustLinkerResult;
@@ -99,10 +99,10 @@ public class OcspTrustLinker implements TrustLinker {
 	}
 
 	/**
-	 * Sets the OCSP response freshness interval in milliseconds. This interval
-	 * is used to determine whether an OCSP response can be considered fresh
-	 * enough to use as basis for linking trust between child certificate and
-	 * parent certificate.
+	 * Sets the OCSP response freshness interval in milliseconds. This interval is
+	 * used to determine whether an OCSP response can be considered fresh enough to
+	 * use as basis for linking trust between child certificate and parent
+	 * certificate.
 	 * 
 	 * @param freshnessInterval
 	 */
@@ -117,14 +117,17 @@ public class OcspTrustLinker implements TrustLinker {
 			throws TrustLinkerResultException, Exception {
 		final URI ocspUri = getOcspUri(childCertificate);
 		if (null == ocspUri) {
-			return TrustLinkerResult.UNDECIDED;
+			LOG.debug("no OCSP URI");
+			LOG.debug("certificate: " + childCertificate);
+			// allow finding OCSPResp in OCSP repository, even without explicit URI.
+			// return TrustLinkerResult.UNDECIDED;
 		}
 		LOG.debug("OCSP URI: " + ocspUri);
 
 		OCSPResp ocspResp = null;
 		try {
 			ocspResp = this.ocspRepository.findOcspResponse(ocspUri, childCertificate, certificate, validationDate);
-		} catch (ServerNotAvailableException e) {
+		} catch (final ServerNotAvailableException e) {
 			throw new TrustLinkerResultException(TrustLinkerResultReason.OCSP_UNAVAILABLE, "OCSP server is unavailable!", e);
 		}
 		if (null == ocspResp) {
@@ -144,51 +147,41 @@ public class OcspTrustLinker implements TrustLinker {
 		final X509CertificateHolder[] responseCertificates = basicOCSPResp.getCerts();
 		for (final X509CertificateHolder responseCertificate : responseCertificates) {
 			LOG.debug("OCSP response cert: " + responseCertificate.getSubject());
-			LOG.debug("OCSP response cert issuer: "
-					+ responseCertificate.getIssuer());
+			LOG.debug("OCSP response cert issuer: " + responseCertificate.getIssuer());
 		}
 
-		algorithmPolicy.checkSignatureAlgorithm(basicOCSPResp
-				.getSignatureAlgOID().getId(), validationDate);
+		algorithmPolicy.checkSignatureAlgorithm(basicOCSPResp.getSignatureAlgOID().getId(), validationDate);
 
 		if (0 == responseCertificates.length) {
 			/*
-			 * This means that the OCSP response has been signed by the issuing
-			 * CA itself.
+			 * This means that the OCSP response has been signed by the issuing CA itself.
 			 */
 			final ContentVerifierProvider contentVerifierProvider = new JcaContentVerifierProviderBuilder()
-					.setProvider(BouncyCastleProvider.PROVIDER_NAME).build(
-							certificate.getPublicKey());
-			final boolean verificationResult = basicOCSPResp
-					.isSignatureValid(contentVerifierProvider);
+					.setProvider(BouncyCastleProvider.PROVIDER_NAME).build(certificate.getPublicKey());
+			final boolean verificationResult = basicOCSPResp.isSignatureValid(contentVerifierProvider);
 			if (false == verificationResult) {
 				LOG.debug("OCSP response signature invalid");
 				return TrustLinkerResult.UNDECIDED;
 			}
 		} else {
 			/*
-			 * We're dealing with a dedicated authorized OCSP Responder
-			 * certificate, or of course with a CA that issues the OCSP
-			 * Responses itself.
+			 * We're dealing with a dedicated authorized OCSP Responder certificate, or of
+			 * course with a CA that issues the OCSP Responses itself.
 			 */
 
 			final X509CertificateHolder ocspResponderCertificate = responseCertificates[0];
 			final ContentVerifierProvider contentVerifierProvider = new JcaContentVerifierProviderBuilder()
-					.setProvider(BouncyCastleProvider.PROVIDER_NAME).build(
-							ocspResponderCertificate);
+					.setProvider(BouncyCastleProvider.PROVIDER_NAME).build(ocspResponderCertificate);
 
-			final boolean verificationResult = basicOCSPResp
-					.isSignatureValid(contentVerifierProvider);
+			final boolean verificationResult = basicOCSPResp.isSignatureValid(contentVerifierProvider);
 			if (false == verificationResult) {
 				LOG.debug("OCSP Responser response signature invalid");
 				return TrustLinkerResult.UNDECIDED;
 			}
-			if (false == Arrays.equals(certificate.getEncoded(),
-					ocspResponderCertificate.getEncoded())) {
+			if (false == Arrays.equals(certificate.getEncoded(), ocspResponderCertificate.getEncoded())) {
 				// check certificate signature algorithm
 				algorithmPolicy.checkSignatureAlgorithm(
-						ocspResponderCertificate.getSignatureAlgorithm()
-								.getAlgorithm().getId(), validationDate);
+						ocspResponderCertificate.getSignatureAlgorithm().getAlgorithm().getId(), validationDate);
 
 				X509Certificate issuingCaCertificate;
 				if (responseCertificates.length < 2) {
@@ -196,16 +189,13 @@ public class OcspTrustLinker implements TrustLinker {
 					// entry
 					LOG.debug("OCSP responder complete certificate chain missing");
 					/*
-					 * Here we assume that the OCSP Responder is directly signed
-					 * by the CA.
+					 * Here we assume that the OCSP Responder is directly signed by the CA.
 					 */
 					issuingCaCertificate = certificate;
 				} else {
-					final CertificateFactory certificateFactory = CertificateFactory
-							.getInstance("X.509");
+					final CertificateFactory certificateFactory = CertificateFactory.getInstance("X.509");
 					issuingCaCertificate = (X509Certificate) certificateFactory
-							.generateCertificate(new ByteArrayInputStream(
-									responseCertificates[1].getEncoded()));
+							.generateCertificate(new ByteArrayInputStream(responseCertificates[1].getEncoded()));
 					/*
 					 * Is next check really required?
 					 */
@@ -215,29 +205,22 @@ public class OcspTrustLinker implements TrustLinker {
 					}
 				}
 				// check certificate signature
-				algorithmPolicy.checkSignatureAlgorithm(
-						issuingCaCertificate.getSigAlgOID(), validationDate);
+				algorithmPolicy.checkSignatureAlgorithm(issuingCaCertificate.getSigAlgOID(), validationDate);
 
 				final PublicKeyTrustLinker publicKeyTrustLinker = new PublicKeyTrustLinker();
-				final CertificateFactory certificateFactory = CertificateFactory
-						.getInstance("X.509");
+				final CertificateFactory certificateFactory = CertificateFactory.getInstance("X.509");
 				final X509Certificate x509OcspResponderCertificate = (X509Certificate) certificateFactory
-						.generateCertificate(new ByteArrayInputStream(
-								ocspResponderCertificate.getEncoded()));
+						.generateCertificate(new ByteArrayInputStream(ocspResponderCertificate.getEncoded()));
 				LOG.debug("OCSP Responder public key fingerprint: "
-						+ DigestUtils.sha1Hex(x509OcspResponderCertificate
-								.getPublicKey().getEncoded()));
-				publicKeyTrustLinker.hasTrustLink(x509OcspResponderCertificate,
-						issuingCaCertificate, validationDate, revocationData,
-						algorithmPolicy);
+						+ DigestUtils.sha1Hex(x509OcspResponderCertificate.getPublicKey().getEncoded()));
+				publicKeyTrustLinker.hasTrustLink(x509OcspResponderCertificate, issuingCaCertificate, validationDate,
+						revocationData, algorithmPolicy);
 				if (null == x509OcspResponderCertificate
-						.getExtensionValue(OCSPObjectIdentifiers.id_pkix_ocsp_nocheck
-								.getId())) {
+						.getExtensionValue(OCSPObjectIdentifiers.id_pkix_ocsp_nocheck.getId())) {
 					LOG.debug("OCSP Responder certificate should have id-pkix-ocsp-nocheck");
 					/*
-					 * TODO: perform CRL validation on the OCSP Responder
-					 * certificate. On the other hand, do we really want to
-					 * check the checker?
+					 * TODO: perform CRL validation on the OCSP Responder certificate. On the other
+					 * hand, do we really want to check the checker?
 					 */
 					return TrustLinkerResult.UNDECIDED;
 				}
@@ -247,8 +230,7 @@ public class OcspTrustLinker implements TrustLinker {
 					LOG.debug("OCSP Responder certificate has no extended key usage extension");
 					return TrustLinkerResult.UNDECIDED;
 				}
-				if (false == extendedKeyUsage
-						.contains(KeyPurposeId.id_kp_OCSPSigning.getId())) {
+				if (false == extendedKeyUsage.contains(KeyPurposeId.id_kp_OCSPSigning.getId())) {
 					LOG.debug("OCSP Responder certificate should have a OCSPSigning extended key usage");
 					return TrustLinkerResult.UNDECIDED;
 				}
@@ -260,10 +242,8 @@ public class OcspTrustLinker implements TrustLinker {
 
 		final DigestCalculatorProvider digCalcProv = new JcaDigestCalculatorProviderBuilder()
 				.setProvider(BouncyCastleProvider.PROVIDER_NAME).build();
-		final CertificateID certificateId = new CertificateID(
-				digCalcProv.get(CertificateID.HASH_SHA1),
-				new JcaX509CertificateHolder(certificate),
-				childCertificate.getSerialNumber());
+		final CertificateID certificateId = new CertificateID(digCalcProv.get(CertificateID.HASH_SHA1),
+				new JcaX509CertificateHolder(certificate), childCertificate.getSerialNumber());
 
 		final SingleResp[] singleResps = basicOCSPResp.getResponses();
 		for (final SingleResp singleResp : singleResps) {
@@ -281,6 +261,7 @@ public class OcspTrustLinker implements TrustLinker {
 			}
 			LOG.debug("OCSP thisUpdate: " + thisUpdate);
 			LOG.debug("(OCSP) nextUpdate: " + nextUpdate);
+			LOG.debug("validation date: " + validationDate);
 			final DateTime beginValidity = thisUpdate.minus(this.freshnessInterval);
 			final DateTime endValidity = nextUpdate.plus(this.freshnessInterval);
 			final DateTime validationDateTime = new DateTime(validationDate);
@@ -293,19 +274,16 @@ public class OcspTrustLinker implements TrustLinker {
 				continue;
 			}
 			if (null == singleResp.getCertStatus()) {
-				LOG.debug("OCSP OK for: "
-						+ childCertificate.getSubjectX500Principal());
+				LOG.debug("OCSP OK for: " + childCertificate.getSubjectX500Principal());
 				addRevocationData(revocationData, ocspResp, ocspUri);
 				return TrustLinkerResult.TRUSTED;
 			} else {
-				LOG.debug("OCSP certificate status: "
-						+ singleResp.getCertStatus().getClass().getName());
+				LOG.debug("OCSP certificate status: " + singleResp.getCertStatus().getClass().getName());
 				if (singleResp.getCertStatus() instanceof RevokedStatus) {
 					LOG.debug("OCSP status revoked");
 				}
 				addRevocationData(revocationData, ocspResp, ocspUri);
-				throw new TrustLinkerResultException(
-						TrustLinkerResultReason.INVALID_REVOCATION_STATUS,
+				throw new TrustLinkerResultException(TrustLinkerResultReason.INVALID_REVOCATION_STATUS,
 						"certificate revoked by OCSP");
 			}
 		}
@@ -314,45 +292,36 @@ public class OcspTrustLinker implements TrustLinker {
 		return TrustLinkerResult.UNDECIDED;
 	}
 
-	private void addRevocationData(final RevocationData revocationData,
-			final OCSPResp ocspResp, final URI uri) throws IOException {
+	private void addRevocationData(final RevocationData revocationData, final OCSPResp ocspResp, final URI uri) throws IOException {
 		if (null == revocationData) {
 			return;
 		}
-		final OCSPRevocationData ocspRevocationData = new OCSPRevocationData(
-				ocspResp.getEncoded(), uri.toString());
+		final OCSPRevocationData ocspRevocationData = new OCSPRevocationData(ocspResp.getEncoded(), uri.toString());
 		revocationData.getOcspRevocationData().add(ocspRevocationData);
 	}
 
-	private URI getOcspUri(final X509Certificate certificate) throws IOException,
-			URISyntaxException {
-		final URI ocspURI = getAccessLocation(certificate,
-				X509ObjectIdentifiers.ocspAccessMethod);
+	private URI getOcspUri(final X509Certificate certificate) throws IOException, URISyntaxException {
+		final URI ocspURI = getAccessLocation(certificate, X509ObjectIdentifiers.ocspAccessMethod);
 		return ocspURI;
 	}
 
-	private URI getAccessLocation(final X509Certificate certificate,
-			final ASN1ObjectIdentifier accessMethod) throws IOException,
-			URISyntaxException {
-		final byte[] authInfoAccessExtensionValue = certificate
-				.getExtensionValue(Extension.authorityInfoAccess.getId());
+	private URI getAccessLocation(final X509Certificate certificate, final ASN1ObjectIdentifier accessMethod)
+			throws IOException, URISyntaxException {
+		final byte[] authInfoAccessExtensionValue = certificate.getExtensionValue(Extension.authorityInfoAccess.getId());
 		if (null == authInfoAccessExtensionValue) {
 			return null;
 		}
 		AuthorityInformationAccess authorityInformationAccess;
-		try (final ASN1InputStream authInfoStream = new ASN1InputStream(
-				new ByteArrayInputStream(authInfoAccessExtensionValue))) {
+		try (final ASN1InputStream authInfoStream = new ASN1InputStream(new ByteArrayInputStream(authInfoAccessExtensionValue))) {
 			final DEROctetString oct = (DEROctetString) (authInfoStream.readObject());
 			try (final ASN1InputStream octStream = new ASN1InputStream(oct.getOctets())) {
 				authorityInformationAccess = AuthorityInformationAccess.getInstance(octStream.readObject());
 			}
 		}
-		final AccessDescription[] accessDescriptions = authorityInformationAccess
-				.getAccessDescriptions();
+		final AccessDescription[] accessDescriptions = authorityInformationAccess.getAccessDescriptions();
 		for (final AccessDescription accessDescription : accessDescriptions) {
 			LOG.debug("access method: " + accessDescription.getAccessMethod());
-			final boolean correctAccessMethod = accessDescription.getAccessMethod()
-					.equals(accessMethod);
+			final boolean correctAccessMethod = accessDescription.getAccessMethod().equals(accessMethod);
 			if (!correctAccessMethod) {
 				continue;
 			}
