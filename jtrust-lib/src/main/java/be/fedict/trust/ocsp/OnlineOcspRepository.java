@@ -77,6 +77,10 @@ public class OnlineOcspRepository implements OcspRepository {
 
 	private static final Log LOG = LogFactory.getLog(OnlineOcspRepository.class);
 
+    private final static int CONNECTION_TIMEOUT_DURATION = 1000;
+
+    private final static int SOCKET_TIMEOUT_DURATION = 2000;
+
 	private final NetworkConfig networkConfig;
 
 	private Credentials credentials;
@@ -155,11 +159,9 @@ public class OnlineOcspRepository implements OcspRepository {
 		if (null != this.networkConfig) {
             final HttpHost proxy = new HttpHost(this.networkConfig.getProxyHost(), this.networkConfig.getProxyPort());
             httpClient.getParams().setParameter(ConnRoutePNames.DEFAULT_PROXY, proxy);
-			int connectionTimeout = 1; // seconds
-			int socketTimeout = 2; // seconds
 			httpClient.getParams().setParameter(ConnRoutePNames.DEFAULT_PROXY, proxy);
-			httpClient.getParams().setParameter(CoreConnectionPNames.CONNECTION_TIMEOUT, connectionTimeout * 1000);
-			httpClient.getParams().setParameter(CoreConnectionPNames.SO_TIMEOUT, socketTimeout * 1000);
+			httpClient.getParams().setParameter(CoreConnectionPNames.CONNECTION_TIMEOUT, CONNECTION_TIMEOUT_DURATION);
+			httpClient.getParams().setParameter(CoreConnectionPNames.SO_TIMEOUT, SOCKET_TIMEOUT_DURATION);
 		}
 		if (null != this.credentials) {
 			this.credentials.init(httpClient.getCredentialsProvider());
