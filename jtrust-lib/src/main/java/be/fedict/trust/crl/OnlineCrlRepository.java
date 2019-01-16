@@ -45,6 +45,7 @@ import org.apache.http.impl.client.DefaultHttpClient;
 
 import be.fedict.trust.Credentials;
 import be.fedict.trust.NetworkConfig;
+import org.apache.http.params.CoreConnectionPNames;
 
 /**
  * Online CRL repository. This CRL repository implementation will download the
@@ -105,7 +106,10 @@ public class OnlineCrlRepository implements CrlRepository {
 
 		if (null != this.networkConfig) {
 			final HttpHost proxy = new HttpHost(this.networkConfig.getProxyHost(), this.networkConfig.getProxyPort());
+			int timeout = 5; // seconds
 			httpClient.getParams().setParameter(ConnRoutePNames.DEFAULT_PROXY, proxy);
+			httpClient.getParams().setParameter(CoreConnectionPNames.CONNECTION_TIMEOUT, timeout * 1000);
+			httpClient.getParams().setParameter(CoreConnectionPNames.SO_TIMEOUT, timeout * 1000);
 		}
 
 		if (null != this.credentials) {
