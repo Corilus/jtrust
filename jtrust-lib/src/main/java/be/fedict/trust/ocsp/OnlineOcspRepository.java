@@ -39,6 +39,7 @@ import org.apache.http.conn.params.ConnRoutePNames;
 import org.apache.http.entity.ByteArrayEntity;
 import org.apache.http.entity.ContentType;
 import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.params.CoreConnectionPNames;
 import org.apache.http.util.EntityUtils;
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.ASN1Primitive;
@@ -75,6 +76,10 @@ import be.fedict.trust.ServerType;
 public class OnlineOcspRepository implements OcspRepository {
 
 	private static final Log LOG = LogFactory.getLog(OnlineOcspRepository.class);
+
+    private final static int CONNECTION_TIMEOUT_DURATION = 1000;
+
+    private final static int SOCKET_TIMEOUT_DURATION = 2000;
 
 	private final NetworkConfig networkConfig;
 
@@ -152,8 +157,11 @@ public class OnlineOcspRepository implements OcspRepository {
 
 		final DefaultHttpClient httpClient = new DefaultHttpClient();
 		if (null != this.networkConfig) {
-			final HttpHost proxy = new HttpHost(this.networkConfig.getProxyHost(), this.networkConfig.getProxyPort());
+            final HttpHost proxy = new HttpHost(this.networkConfig.getProxyHost(), this.networkConfig.getProxyPort());
+            httpClient.getParams().setParameter(ConnRoutePNames.DEFAULT_PROXY, proxy);
 			httpClient.getParams().setParameter(ConnRoutePNames.DEFAULT_PROXY, proxy);
+			httpClient.getParams().setParameter(CoreConnectionPNames.CONNECTION_TIMEOUT, CONNECTION_TIMEOUT_DURATION);
+			httpClient.getParams().setParameter(CoreConnectionPNames.SO_TIMEOUT, SOCKET_TIMEOUT_DURATION);
 		}
 		if (null != this.credentials) {
 			this.credentials.init(httpClient.getCredentialsProvider());

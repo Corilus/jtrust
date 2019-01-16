@@ -43,6 +43,7 @@ import org.apache.http.impl.client.DefaultHttpClient;
 
 import be.fedict.trust.Credentials;
 import be.fedict.trust.NetworkConfig;
+import org.apache.http.params.CoreConnectionPNames;
 import be.fedict.trust.ServerNotAvailableException;
 import be.fedict.trust.ServerType;
 
@@ -55,6 +56,10 @@ import be.fedict.trust.ServerType;
 public class OnlineCrlRepository implements CrlRepository {
 
 	private static final Log LOG = LogFactory.getLog(OnlineCrlRepository.class);
+
+	private final static int CONNECTION_TIMEOUT_DURATION = 1000;
+
+	private final static int SOCKET_TIMEOUT_DURATION = 2000;
 
 	private final NetworkConfig networkConfig;
 
@@ -106,6 +111,8 @@ public class OnlineCrlRepository implements CrlRepository {
 		if (null != this.networkConfig) {
 			final HttpHost proxy = new HttpHost(this.networkConfig.getProxyHost(), this.networkConfig.getProxyPort());
 			httpClient.getParams().setParameter(ConnRoutePNames.DEFAULT_PROXY, proxy);
+			httpClient.getParams().setParameter(CoreConnectionPNames.CONNECTION_TIMEOUT, CONNECTION_TIMEOUT_DURATION);
+			httpClient.getParams().setParameter(CoreConnectionPNames.SO_TIMEOUT, SOCKET_TIMEOUT_DURATION);
 		}
 
 		if (null != this.credentials) {
