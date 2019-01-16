@@ -155,10 +155,11 @@ public class OnlineOcspRepository implements OcspRepository {
 		if (null != this.networkConfig) {
             final HttpHost proxy = new HttpHost(this.networkConfig.getProxyHost(), this.networkConfig.getProxyPort());
             httpClient.getParams().setParameter(ConnRoutePNames.DEFAULT_PROXY, proxy);
-			int timeout = 5; // seconds
+			int connectionTimeout = 1; // seconds
+			int socketTimeout = 2; // seconds
 			httpClient.getParams().setParameter(ConnRoutePNames.DEFAULT_PROXY, proxy);
-			httpClient.getParams().setParameter(CoreConnectionPNames.CONNECTION_TIMEOUT, timeout * 1000);
-			httpClient.getParams().setParameter(CoreConnectionPNames.SO_TIMEOUT, timeout * 1000);
+			httpClient.getParams().setParameter(CoreConnectionPNames.CONNECTION_TIMEOUT, connectionTimeout * 1000);
+			httpClient.getParams().setParameter(CoreConnectionPNames.SO_TIMEOUT, socketTimeout * 1000);
 		}
 		if (null != this.credentials) {
 			this.credentials.init(httpClient.getCredentialsProvider());
