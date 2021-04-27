@@ -1,6 +1,7 @@
 /*
  * Java Trust Project.
  * Copyright (C) 2009-2011 FedICT.
+ * Copyright (C) 2019-2020 e-Contract.be BVBA.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -19,6 +20,7 @@
 package be.fedict.trust.tsl;
 
 import java.math.BigInteger;
+import java.security.cert.X509Certificate;
 
 /**
  * Interface for a Trusted List consumer component.
@@ -29,10 +31,14 @@ import java.math.BigInteger;
 public interface TSLConsumer {
 
 	/**
-	 * Called by the TSLParser when parsing a Trusted List. Communicated the
-	 * Trusted List sequence number to this TSL consumer component.
+	 * Called by the TSLParser when parsing a Trusted List. Communicated the Trusted
+	 * List sequence number to this TSL consumer component.
 	 * 
 	 * @param tslSequenceNumber
 	 */
 	void setTSLSequenceNumber(BigInteger tslSequenceNumber);
+
+	void service(String serviceTypeIdentifier, X509Certificate serviceCertificate) throws Exception;
+
+	void error(String tslLocation, Exception e);
 }

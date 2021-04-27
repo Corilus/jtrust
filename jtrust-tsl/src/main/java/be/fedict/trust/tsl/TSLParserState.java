@@ -1,6 +1,6 @@
 /*
  * Java Trust Project.
- * Copyright (C) 2018 e-Contract.be BVBA.
+ * Copyright (C) 2019 e-Contract.be BVBA.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -16,32 +16,24 @@
  * http://www.gnu.org/licenses/.
  */
 
-package be.fedict.trust.test;
+package be.fedict.trust.tsl;
 
-import org.joda.time.DateTime;
+import java.util.HashSet;
+import java.util.Set;
 
-/**
- * Implementation of a clock that yields a fixed time.
- * 
- * @author Frank Cornelis
- *
- */
-public class FixedClock implements Clock {
+public class TSLParserState {
 
-	private final DateTime now;
+	private final Set<String> parsedLocations;
 
-	/**
-	 * Main constructor.
-	 * 
-	 * @param now
-	 *            the fixed time for this clock.
-	 */
-	public FixedClock(DateTime now) {
-		this.now = now;
+	public TSLParserState() {
+		this.parsedLocations = new HashSet<>();
 	}
 
-	@Override
-	public DateTime getTime() {
-		return this.now;
+	public boolean isAlreadyParser(String location) {
+		return this.parsedLocations.contains(location);
+	}
+
+	public void addParsedLocation(String location) {
+		this.parsedLocations.add(location);
 	}
 }

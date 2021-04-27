@@ -1,6 +1,6 @@
 /*
  * Java Trust Project.
- * Copyright (C) 2018 e-Contract.be BVBA.
+ * Copyright (C) 2018-2021 e-Contract.be BV.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -26,6 +26,8 @@ import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -53,8 +55,8 @@ import org.bouncycastle.crypto.util.PrivateKeyFactory;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.DefaultDigestAlgorithmIdentifierFinder;
 import org.bouncycastle.operator.DefaultSignatureAlgorithmIdentifierFinder;
+import org.bouncycastle.operator.bc.BcECContentSignerBuilder;
 import org.bouncycastle.operator.bc.BcRSAContentSignerBuilder;
-import org.joda.time.DateTime;
 
 /**
  * A certification authority. Can issue certificates and expose revocation
@@ -80,16 +82,16 @@ public class CertificationAuthority {
 	private final List<X509Certificate> issuedCertificates;
 
 	// value is revocation date
-	private final Map<X509Certificate, Date> revokedCertificates;
+	private final Map<X509Certificate, LocalDateTime> revokedCertificates;
+
+	private String signatureAlgorithm;
 
 	/**
 	 * Creates a new certification authority, issued by another CA.
 	 * 
 	 * @param world
-	 * @param name
-	 *            the DN of this CA.
-	 * @param issuer
-	 *            the issuing CA.
+	 * @param name   the DN of this CA.
+	 * @param issuer the issuing CA.
 	 */
 	public CertificationAuthority(World world, String name, CertificationAuthority issuer) {
 		this.world = world;
@@ -98,17 +100,35 @@ public class CertificationAuthority {
 		this.revocationServices = new LinkedList<>();
 		this.issuedCertificates = new LinkedList<>();
 		this.revokedCertificates = new HashMap<>();
+		this.signatureAlgorithm = "SHA1withRSA";
 	}
 
 	/**
 	 * Creates a root certification authority.
 	 * 
 	 * @param world
-	 * @param name
-	 *            the DN of the CA.
+	 * @param name  the DN of the CA.
 	 */
 	public CertificationAuthority(World world, String name) {
 		this(world, name, null);
+	}
+
+	/**
+	 * Gives back the used signature algorithm for issuing certificates and such.
+	 * 
+	 * @return
+	 */
+	public String getSignatureAlgorithm() {
+		return this.signatureAlgorithm;
+	}
+
+	/**
+	 * Sets the signature algorithm for issing certificates and such.
+	 * 
+	 * @param signatureAlgorithm
+	 */
+	public void setSignatureAlgorithm(String signatureAlgorithm) {
+		this.signatureAlgorithm = signatureAlgorithm;
 	}
 
 	/**
@@ -144,10 +164,8 @@ public class CertificationAuthority {
 	/**
 	 * Issues another CA, signed by this CA.
 	 * 
-	 * @param publicKey
-	 *            the public key of the new CA.
-	 * @param name
-	 *            the DN of the new CA.
+	 * @param publicKey the public key of the new CA.
+	 * @param name      the DN of the new CA.
 	 * @return the new CA certificate.
 	 * @throws Exception
 	 */
@@ -159,8 +177,8 @@ public class CertificationAuthority {
 		X509Certificate caCert = getCertificate();
 
 		Clock clock = this.world.getClock();
-		DateTime notBefore = clock.getTime();
-		DateTime notAfter = new DateTime(caCert.getNotAfter());
+		LocalDateTime notBefore = clock.getTime();
+		LocalDateTime notAfter = caCert.getNotAfter().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
 
 		X500Name issuerName = new X500Name(this.name);
 		X500Name subjectName = new X500Name(name);
@@ -168,7 +186,8 @@ public class CertificationAuthority {
 		BigInteger serial = new BigInteger(128, new SecureRandom());
 		SubjectPublicKeyInfo publicKeyInfo = SubjectPublicKeyInfo.getInstance(publicKey.getEncoded());
 		X509v3CertificateBuilder x509v3CertificateBuilder = new X509v3CertificateBuilder(issuerName, serial,
-				notBefore.toDate(), notAfter.toDate(), subjectName, publicKeyInfo);
+				Date.from(notBefore.atZone(ZoneId.systemDefault()).toInstant()),
+				Date.from(notAfter.atZone(ZoneId.systemDefault()).toInstant()), subjectName, publicKeyInfo);
 
 		JcaX509ExtensionUtils extensionUtils = new JcaX509ExtensionUtils();
 		x509v3CertificateBuilder.addExtension(Extension.subjectKeyIdentifier, false,
@@ -186,12 +205,17 @@ public class CertificationAuthority {
 			revocationService.addExtension(x509v3CertificateBuilder);
 		}
 
-		AlgorithmIdentifier sigAlgId = new DefaultSignatureAlgorithmIdentifierFinder().find("SHA1withRSA");
+		AlgorithmIdentifier sigAlgId = new DefaultSignatureAlgorithmIdentifierFinder().find(this.signatureAlgorithm);
 		AlgorithmIdentifier digAlgId = new DefaultDigestAlgorithmIdentifierFinder().find(sigAlgId);
 		AsymmetricKeyParameter asymmetricKeyParameter = PrivateKeyFactory
 				.createKey(this.keyPair.getPrivate().getEncoded());
 
-		ContentSigner contentSigner = new BcRSAContentSignerBuilder(sigAlgId, digAlgId).build(asymmetricKeyParameter);
+		ContentSigner contentSigner;
+		if (this.signatureAlgorithm.contains("RSA")) {
+			contentSigner = new BcRSAContentSignerBuilder(sigAlgId, digAlgId).build(asymmetricKeyParameter);
+		} else {
+			contentSigner = new BcECContentSignerBuilder(sigAlgId, digAlgId).build(asymmetricKeyParameter);
+		}
 		X509CertificateHolder x509CertificateHolder = x509v3CertificateBuilder.build(contentSigner);
 
 		byte[] encodedCertificate = x509CertificateHolder.getEncoded();
@@ -250,7 +274,11 @@ public class CertificationAuthority {
 			// make sure that the issuer is already issued
 			this.issuer.getCertificate();
 		}
-		this.keyPair = PKITestUtils.generateKeyPair();
+		if (this.signatureAlgorithm.contains("RSA")) {
+			this.keyPair = PKITestUtils.generateKeyPair();
+		} else {
+			this.keyPair = PKITestUtils.generateKeyPair("EC");
+		}
 		if (this.issuer == null) {
 			this.certificate = generateSelfSignedCertificate();
 		} else {
@@ -285,8 +313,8 @@ public class CertificationAuthority {
 
 	private X509Certificate generateSelfSignedCertificate() throws Exception {
 		Clock clock = this.world.getClock();
-		DateTime notBefore = clock.getTime();
-		DateTime notAfter = notBefore.plusYears(1);
+		LocalDateTime notBefore = clock.getTime();
+		LocalDateTime notAfter = notBefore.plusYears(1);
 
 		X500Name issuerName = new X500Name(this.name);
 		X500Name subjectName = new X500Name(this.name);
@@ -294,7 +322,8 @@ public class CertificationAuthority {
 		BigInteger serial = new BigInteger(128, new SecureRandom());
 		SubjectPublicKeyInfo publicKeyInfo = SubjectPublicKeyInfo.getInstance(this.keyPair.getPublic().getEncoded());
 		X509v3CertificateBuilder x509v3CertificateBuilder = new X509v3CertificateBuilder(issuerName, serial,
-				notBefore.toDate(), notAfter.toDate(), subjectName, publicKeyInfo);
+				Date.from(notBefore.atZone(ZoneId.systemDefault()).toInstant()),
+				Date.from(notAfter.atZone(ZoneId.systemDefault()).toInstant()), subjectName, publicKeyInfo);
 
 		JcaX509ExtensionUtils extensionUtils = new JcaX509ExtensionUtils();
 		x509v3CertificateBuilder.addExtension(Extension.subjectKeyIdentifier, false,
@@ -308,12 +337,17 @@ public class CertificationAuthority {
 		KeyUsage keyUsage = new KeyUsage(KeyUsage.cRLSign | KeyUsage.keyCertSign);
 		x509v3CertificateBuilder.addExtension(Extension.keyUsage, true, keyUsage);
 
-		AlgorithmIdentifier sigAlgId = new DefaultSignatureAlgorithmIdentifierFinder().find("SHA1withRSA");
+		AlgorithmIdentifier sigAlgId = new DefaultSignatureAlgorithmIdentifierFinder().find(this.signatureAlgorithm);
 		AlgorithmIdentifier digAlgId = new DefaultDigestAlgorithmIdentifierFinder().find(sigAlgId);
 		AsymmetricKeyParameter asymmetricKeyParameter = PrivateKeyFactory
 				.createKey(this.keyPair.getPrivate().getEncoded());
 
-		ContentSigner contentSigner = new BcRSAContentSignerBuilder(sigAlgId, digAlgId).build(asymmetricKeyParameter);
+		ContentSigner contentSigner;
+		if (this.signatureAlgorithm.contains("RSA")) {
+			contentSigner = new BcRSAContentSignerBuilder(sigAlgId, digAlgId).build(asymmetricKeyParameter);
+		} else {
+			contentSigner = new BcECContentSignerBuilder(sigAlgId, digAlgId).build(asymmetricKeyParameter);
+		}
 		X509CertificateHolder x509CertificateHolder = x509v3CertificateBuilder.build(contentSigner);
 
 		byte[] encodedCertificate = x509CertificateHolder.getEncoded();
@@ -329,10 +363,8 @@ public class CertificationAuthority {
 	/**
 	 * Issues an OCSP Responder certificate.
 	 * 
-	 * @param publicKey
-	 *            the public key of the OCSP responder.
-	 * @param name
-	 *            the DN of the OCSP responder.
+	 * @param publicKey the public key of the OCSP responder.
+	 * @param name      the DN of the OCSP responder.
 	 * @return
 	 * @throws Exception
 	 */
@@ -344,8 +376,9 @@ public class CertificationAuthority {
 		X509Certificate caCertificate = getCertificate();
 
 		Clock clock = this.world.getClock();
-		DateTime notBefore = clock.getTime();
-		DateTime notAfter = new DateTime(caCertificate.getNotAfter());
+		LocalDateTime notBefore = clock.getTime();
+		LocalDateTime notAfter = caCertificate.getNotAfter().toInstant().atZone(ZoneId.systemDefault())
+				.toLocalDateTime();
 
 		X500Name issuerName = new X500Name(this.name);
 		X500Name subjectName = new X500Name(name);
@@ -353,7 +386,8 @@ public class CertificationAuthority {
 		BigInteger serial = new BigInteger(128, new SecureRandom());
 		SubjectPublicKeyInfo publicKeyInfo = SubjectPublicKeyInfo.getInstance(publicKey.getEncoded());
 		X509v3CertificateBuilder x509v3CertificateBuilder = new X509v3CertificateBuilder(issuerName, serial,
-				notBefore.toDate(), notAfter.toDate(), subjectName, publicKeyInfo);
+				Date.from(notBefore.atZone(ZoneId.systemDefault()).toInstant()),
+				Date.from(notAfter.atZone(ZoneId.systemDefault()).toInstant()), subjectName, publicKeyInfo);
 
 		JcaX509ExtensionUtils extensionUtils = new JcaX509ExtensionUtils();
 		x509v3CertificateBuilder.addExtension(Extension.subjectKeyIdentifier, false,
@@ -372,12 +406,17 @@ public class CertificationAuthority {
 		x509v3CertificateBuilder.addExtension(Extension.extendedKeyUsage, true,
 				new ExtendedKeyUsage(KeyPurposeId.id_kp_OCSPSigning));
 
-		AlgorithmIdentifier sigAlgId = new DefaultSignatureAlgorithmIdentifierFinder().find("SHA1withRSA");
+		AlgorithmIdentifier sigAlgId = new DefaultSignatureAlgorithmIdentifierFinder().find(this.signatureAlgorithm);
 		AlgorithmIdentifier digAlgId = new DefaultDigestAlgorithmIdentifierFinder().find(sigAlgId);
 		AsymmetricKeyParameter asymmetricKeyParameter = PrivateKeyFactory
 				.createKey(this.keyPair.getPrivate().getEncoded());
 
-		ContentSigner contentSigner = new BcRSAContentSignerBuilder(sigAlgId, digAlgId).build(asymmetricKeyParameter);
+		ContentSigner contentSigner;
+		if (this.signatureAlgorithm.contains("RSA")) {
+			contentSigner = new BcRSAContentSignerBuilder(sigAlgId, digAlgId).build(asymmetricKeyParameter);
+		} else {
+			contentSigner = new BcECContentSignerBuilder(sigAlgId, digAlgId).build(asymmetricKeyParameter);
+		}
 		X509CertificateHolder x509CertificateHolder = x509v3CertificateBuilder.build(contentSigner);
 
 		byte[] encodedCertificate = x509CertificateHolder.getEncoded();
@@ -393,10 +432,8 @@ public class CertificationAuthority {
 	/**
 	 * Issues a timestamp authority certificate.
 	 * 
-	 * @param publicKey
-	 *            the public key of the TSA.
-	 * @param name
-	 *            the DN of the TSA.
+	 * @param publicKey the public key of the TSA.
+	 * @param name      the DN of the TSA.
 	 * @return
 	 * @throws Exception
 	 */
@@ -408,8 +445,8 @@ public class CertificationAuthority {
 		X509Certificate caCert = getCertificate();
 
 		Clock clock = this.world.getClock();
-		DateTime notBefore = clock.getTime();
-		DateTime notAfter = new DateTime(caCert.getNotAfter());
+		LocalDateTime notBefore = clock.getTime();
+		LocalDateTime notAfter = caCert.getNotAfter().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
 
 		X500Name issuerName = new X500Name(this.name);
 		X500Name subjectName = new X500Name(name);
@@ -417,7 +454,8 @@ public class CertificationAuthority {
 		BigInteger serial = new BigInteger(128, new SecureRandom());
 		SubjectPublicKeyInfo publicKeyInfo = SubjectPublicKeyInfo.getInstance(publicKey.getEncoded());
 		X509v3CertificateBuilder x509v3CertificateBuilder = new X509v3CertificateBuilder(issuerName, serial,
-				notBefore.toDate(), notAfter.toDate(), subjectName, publicKeyInfo);
+				Date.from(notBefore.atZone(ZoneId.systemDefault()).toInstant()),
+				Date.from(notAfter.atZone(ZoneId.systemDefault()).toInstant()), subjectName, publicKeyInfo);
 
 		JcaX509ExtensionUtils extensionUtils = new JcaX509ExtensionUtils();
 		x509v3CertificateBuilder.addExtension(Extension.subjectKeyIdentifier, false,
@@ -435,12 +473,17 @@ public class CertificationAuthority {
 		x509v3CertificateBuilder.addExtension(Extension.extendedKeyUsage, true,
 				new ExtendedKeyUsage(KeyPurposeId.id_kp_timeStamping));
 
-		AlgorithmIdentifier sigAlgId = new DefaultSignatureAlgorithmIdentifierFinder().find("SHA1withRSA");
+		AlgorithmIdentifier sigAlgId = new DefaultSignatureAlgorithmIdentifierFinder().find(this.signatureAlgorithm);
 		AlgorithmIdentifier digAlgId = new DefaultDigestAlgorithmIdentifierFinder().find(sigAlgId);
 		AsymmetricKeyParameter asymmetricKeyParameter = PrivateKeyFactory
 				.createKey(this.keyPair.getPrivate().getEncoded());
 
-		ContentSigner contentSigner = new BcRSAContentSignerBuilder(sigAlgId, digAlgId).build(asymmetricKeyParameter);
+		ContentSigner contentSigner;
+		if (this.signatureAlgorithm.contains("RSA")) {
+			contentSigner = new BcRSAContentSignerBuilder(sigAlgId, digAlgId).build(asymmetricKeyParameter);
+		} else {
+			contentSigner = new BcECContentSignerBuilder(sigAlgId, digAlgId).build(asymmetricKeyParameter);
+		}
 		X509CertificateHolder x509CertificateHolder = x509v3CertificateBuilder.build(contentSigner);
 
 		byte[] encodedCertificate = x509CertificateHolder.getEncoded();
@@ -456,10 +499,8 @@ public class CertificationAuthority {
 	/**
 	 * Issues a signing end-entity certificate.
 	 * 
-	 * @param publicKey
-	 *            the public key of the end-entity certificate.
-	 * @param name
-	 *            the DN of the end-entity certificate.
+	 * @param publicKey the public key of the end-entity certificate.
+	 * @param name      the DN of the end-entity certificate.
 	 * @return
 	 * @throws Exception
 	 */
@@ -469,32 +510,29 @@ public class CertificationAuthority {
 		}
 		// make sure our CA certificate is generated before the issued certificate
 		X509Certificate caCert = getCertificate();
-		DateTime notAfter = new DateTime(caCert.getNotAfter());
+		LocalDateTime notAfter = caCert.getNotAfter().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
 		return issueSigningCertificate(publicKey, name, notAfter);
 	}
 
 	/**
 	 * Issues a signing end-entity certificate.
 	 * 
-	 * @param publicKey
-	 *            the public key of the end-entity certificate.
-	 * @param name
-	 *            the DN of the end-entity certificate.
-	 * @param notAfter
-	 *            expiration date of issued certificate.
+	 * @param publicKey the public key of the end-entity certificate.
+	 * @param name      the DN of the end-entity certificate.
+	 * @param notAfter  expiration date of issued certificate.
 	 * @return
 	 * @throws Exception
 	 */
-	public X509Certificate issueSigningCertificate(PublicKey publicKey, String name, DateTime notAfter)
+	public X509Certificate issueSigningCertificate(PublicKey publicKey, String name, LocalDateTime notAfter)
 			throws Exception {
 		if (!this.world.isRunning()) {
 			throw new IllegalStateException();
 		}
 		// make sure our CA certificate is generated before the issued certificate
-		X509Certificate caCert = getCertificate();
+		getCertificate();
 
 		Clock clock = this.world.getClock();
-		DateTime notBefore = clock.getTime();
+		LocalDateTime notBefore = clock.getTime();
 
 		X500Name issuerName = new X500Name(this.name);
 		X500Name subjectName = new X500Name(name);
@@ -502,7 +540,8 @@ public class CertificationAuthority {
 		BigInteger serial = new BigInteger(128, new SecureRandom());
 		SubjectPublicKeyInfo publicKeyInfo = SubjectPublicKeyInfo.getInstance(publicKey.getEncoded());
 		X509v3CertificateBuilder x509v3CertificateBuilder = new X509v3CertificateBuilder(issuerName, serial,
-				notBefore.toDate(), notAfter.toDate(), subjectName, publicKeyInfo);
+				Date.from(notBefore.atZone(ZoneId.systemDefault()).toInstant()),
+				Date.from(notAfter.atZone(ZoneId.systemDefault()).toInstant()), subjectName, publicKeyInfo);
 
 		JcaX509ExtensionUtils extensionUtils = new JcaX509ExtensionUtils();
 		x509v3CertificateBuilder.addExtension(Extension.subjectKeyIdentifier, false,
@@ -522,12 +561,17 @@ public class CertificationAuthority {
 		vec.add(new QCStatement(QCStatement.id_etsi_qcs_QcSSCD));
 		x509v3CertificateBuilder.addExtension(Extension.qCStatements, true, new DERSequence(vec));
 
-		AlgorithmIdentifier sigAlgId = new DefaultSignatureAlgorithmIdentifierFinder().find("SHA1withRSA");
+		AlgorithmIdentifier sigAlgId = new DefaultSignatureAlgorithmIdentifierFinder().find(this.signatureAlgorithm);
 		AlgorithmIdentifier digAlgId = new DefaultDigestAlgorithmIdentifierFinder().find(sigAlgId);
 		AsymmetricKeyParameter asymmetricKeyParameter = PrivateKeyFactory
 				.createKey(this.keyPair.getPrivate().getEncoded());
 
-		ContentSigner contentSigner = new BcRSAContentSignerBuilder(sigAlgId, digAlgId).build(asymmetricKeyParameter);
+		ContentSigner contentSigner;
+		if (this.signatureAlgorithm.contains("RSA")) {
+			contentSigner = new BcRSAContentSignerBuilder(sigAlgId, digAlgId).build(asymmetricKeyParameter);
+		} else {
+			contentSigner = new BcECContentSignerBuilder(sigAlgId, digAlgId).build(asymmetricKeyParameter);
+		}
 		X509CertificateHolder x509CertificateHolder = x509v3CertificateBuilder.build(contentSigner);
 
 		byte[] encodedCertificate = x509CertificateHolder.getEncoded();
@@ -552,7 +596,7 @@ public class CertificationAuthority {
 		if (this.revokedCertificates.containsKey(certificate)) {
 			throw new IllegalArgumentException();
 		}
-		Date revocationDate = this.world.getClock().getTime().toDate();
+		LocalDateTime revocationDate = this.world.getClock().getTime();
 		this.revokedCertificates.put(certificate, revocationDate);
 	}
 
@@ -570,7 +614,7 @@ public class CertificationAuthority {
 	 * 
 	 * @return
 	 */
-	public Map<X509Certificate, Date> getRevokedCertificates() {
+	public Map<X509Certificate, LocalDateTime> getRevokedCertificates() {
 		return this.revokedCertificates;
 	}
 }

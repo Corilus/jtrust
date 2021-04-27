@@ -1,7 +1,7 @@
 /*
  * Java Trust Project.
  * Copyright (C) 2009 FedICT.
- * Copyright (C) 2013-2018 e-Contract.be BVBA.
+ * Copyright (C) 2013-2020 e-Contract.be BV.
  * Copyright (C) 2017 Corilus NV.
  *
  * This is free software; you can redistribute it and/or modify it
@@ -28,10 +28,10 @@ import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.bouncycastle.util.io.pem.PemObject;
 import org.bouncycastle.util.io.pem.PemReader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import be.fedict.trust.constraints.CertificatePoliciesCertificateConstraint;
 import be.fedict.trust.constraints.DistinguishedNameCertificateConstraint;
@@ -51,7 +51,7 @@ import be.fedict.trust.repository.MemoryCertificateRepository;
  */
 public class BelgianTrustValidatorFactory {
 
-	private static final Log LOG = LogFactory.getLog(BelgianTrustValidatorFactory.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(BelgianTrustValidatorFactory.class);
 
 	/**
 	 * Creates a trust validator according to Belgian PKI rules for authentication
@@ -67,8 +67,7 @@ public class BelgianTrustValidatorFactory {
 	 * Creates a trust validator according to Belgian PKI rules for authentication
 	 * certificates.
 	 * 
-	 * @param networkConfig
-	 *            the optional network configuration to be used.
+	 * @param networkConfig the optional network configuration to be used.
 	 * @return a trust validator instance.
 	 */
 	public static TrustValidator createTrustValidator(NetworkConfig networkConfig) {
@@ -89,10 +88,8 @@ public class BelgianTrustValidatorFactory {
 	 * architecture based on Java EE.
 	 * </p>
 	 * 
-	 * @param networkConfig
-	 *            the optional network configuration to be used.
-	 * @param externalTrustLinker
-	 *            the optional external trust linker to be used.
+	 * @param networkConfig       the optional network configuration to be used.
+	 * @param externalTrustLinker the optional external trust linker to be used.
 	 * @return a trust validator instance.
 	 */
 	public static TrustValidator createTrustValidator(NetworkConfig networkConfig, TrustLinker externalTrustLinker) {
@@ -106,10 +103,8 @@ public class BelgianTrustValidatorFactory {
 	 * Creates a trust validator according to Belgian PKI rules for non-repudiation
 	 * certificates.
 	 * 
-	 * @param networkConfig
-	 *            the optional network configuration to be used.
-	 * @param externalTrustLinker
-	 *            the optional external trust linker to be used.
+	 * @param networkConfig       the optional network configuration to be used.
+	 * @param externalTrustLinker the optional external trust linker to be used.
 	 * @return a trust validator instance.
 	 */
 	public static TrustValidator createNonRepudiationTrustValidator(NetworkConfig networkConfig,
@@ -124,8 +119,7 @@ public class BelgianTrustValidatorFactory {
 	 * Creates a trust validator according to Belgian PKI rules for non-repudiation
 	 * certificates.
 	 * 
-	 * @param networkConfig
-	 *            the optional network configuration to be used.
+	 * @param networkConfig the optional network configuration to be used.
 	 * @return a trust validator instance.
 	 */
 	public static TrustValidator createNonRepudiationTrustValidator(NetworkConfig networkConfig) {
@@ -138,8 +132,7 @@ public class BelgianTrustValidatorFactory {
 	 * Creates a trust validator according to Belgian PKI rules for the national
 	 * registry certificate.
 	 * 
-	 * @param networkConfig
-	 *            the optional network configuration to be used.
+	 * @param networkConfig the optional network configuration to be used.
 	 * @return a trust validator instance.
 	 */
 	public static TrustValidator createNationalRegistryTrustValidator(NetworkConfig networkConfig) {
@@ -153,8 +146,7 @@ public class BelgianTrustValidatorFactory {
 	 * Creates a trust validator according to Belgian PKI rules for TSA
 	 * certificates.
 	 * 
-	 * @param networkConfig
-	 *            the optional network configuration to be used.
+	 * @param networkConfig the optional network configuration to be used.
 	 * @return a trust validator instance.
 	 */
 	public static TrustValidator createTSATrustValidator(NetworkConfig networkConfig) {
@@ -165,10 +157,8 @@ public class BelgianTrustValidatorFactory {
 	 * Creates a trust validator according to Belgian PKI rules for TSA
 	 * certificates.
 	 * 
-	 * @param networkConfig
-	 *            the optional network configuration to be used.
-	 * @param externalTrustLinker
-	 *            the optional external trust linker to be used.
+	 * @param networkConfig       the optional network configuration to be used.
+	 * @param externalTrustLinker the optional external trust linker to be used.
 	 * @return a trust validator instance.
 	 */
 	public static TrustValidator createTSATrustValidator(NetworkConfig networkConfig, TrustLinker externalTrustLinker) {
@@ -196,12 +186,9 @@ public class BelgianTrustValidatorFactory {
 	 * architecture based on Java EE.
 	 * </p>
 	 * 
-	 * @param networkConfig
-	 *            the optional network configuration to be used.
-	 * @param externalTrustLinker
-	 *            the optional external trust linker to be used.
-	 * @param certificateRepository
-	 *            containing the Belgian eID trust points.
+	 * @param networkConfig         the optional network configuration to be used.
+	 * @param externalTrustLinker   the optional external trust linker to be used.
+	 * @param certificateRepository containing the Belgian eID trust points.
 	 * @return a trust validator instance.
 	 */
 	public static TrustValidator createTrustValidator(NetworkConfig networkConfig, TrustLinker externalTrustLinker,
@@ -228,6 +215,9 @@ public class BelgianTrustValidatorFactory {
 		X509Certificate rootCa4_2Certificate = loadCertificate("be/fedict/trust/belgiumrca4-2.crt");
 		memoryCertificateRepository.addTrustPoint(rootCa4_2Certificate);
 
+		X509Certificate rootCa6Certificate = loadCertificate("be/fedict/trust/belgiumrca6.crt");
+		memoryCertificateRepository.addTrustPoint(rootCa6Certificate);
+
 		return memoryCertificateRepository;
 	}
 
@@ -240,6 +230,10 @@ public class BelgianTrustValidatorFactory {
 		X509Certificate newRootTsaCertificate = loadPemCertificate(
 				"be/fedict/trust/roots/Baltimore Cybertrust Root.pem");
 		memoryCertificateRepository.addTrustPoint(newRootTsaCertificate);
+
+		X509Certificate cybertrustGlobalRootTsaCertificate = loadCertificate(
+				"be/fedict/trust/roots/CybertrustGlobalRoot.crt");
+		memoryCertificateRepository.addTrustPoint(cybertrustGlobalRootTsaCertificate);
 
 		return memoryCertificateRepository;
 	}
@@ -325,18 +319,18 @@ public class BelgianTrustValidatorFactory {
 			certificatePoliciesCertificateConstraint.addCertificatePolicy("2.16.56.12.1.1.4");
 			break;
 		}
-		trustValidator.addCertificateConstrain(certificatePoliciesCertificateConstraint);
+		trustValidator.addCertificateConstraint(certificatePoliciesCertificateConstraint);
 
 		if (CertificateType.NATIONAL_REGISTRY == certificateType) {
 			DistinguishedNameCertificateConstraint nameConstraint = new DistinguishedNameCertificateConstraint(
 					"CN=RRN, O=RRN, C=BE");
-			trustValidator.addCertificateConstrain(nameConstraint);
+			trustValidator.addCertificateConstraint(nameConstraint);
 		}
 
 		if (CertificateType.SIGN == certificateType) {
 			QCStatementsCertificateConstraint qcStatementsCertificateConstraint = new QCStatementsCertificateConstraint(
 					true);
-			trustValidator.addCertificateConstrain(qcStatementsCertificateConstraint);
+			trustValidator.addCertificateConstraint(qcStatementsCertificateConstraint);
 		}
 
 		return trustValidator;
@@ -374,7 +368,7 @@ public class BelgianTrustValidatorFactory {
 	}
 
 	private static X509Certificate loadCertificate(String resourceName) {
-		LOG.debug("loading certificate: " + resourceName);
+		LOGGER.debug("loading certificate: {}", resourceName);
 		Thread currentThread = Thread.currentThread();
 		ClassLoader classLoader = currentThread.getContextClassLoader();
 		InputStream certificateInputStream = classLoader.getResourceAsStream(resourceName);

@@ -1,6 +1,6 @@
 /*
  * Java Trust Project.
- * Copyright (C) 2018 e-Contract.be BVBA.
+ * Copyright (C) 2018-2021 e-Contract.be BV.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -18,18 +18,35 @@
 
 package be.fedict.trust.test;
 
-import org.joda.time.DateTime;
+import java.time.LocalDateTime;
 
 /**
- * Implementation of a clock that used the local machine time.
+ * Implementation of a clock that ticks from a given starting point.
  * 
  * @author Frank Cornelis
  *
  */
-public class LocalClock implements Clock {
+public class TickingClock implements Clock {
+
+	private LocalDateTime start;
+
+	public TickingClock(LocalDateTime start) {
+		this.start = start;
+	}
 
 	@Override
-	public DateTime getTime() {
-		return new DateTime();
+	public LocalDateTime getTime() {
+		LocalDateTime now = this.start;
+		this.start = this.start.plusSeconds(1);
+		return now;
+	}
+
+	/**
+	 * Resets the clock's start time to the given value.
+	 * 
+	 * @param start
+	 */
+	public void reset(LocalDateTime start) {
+		this.start = start;
 	}
 }

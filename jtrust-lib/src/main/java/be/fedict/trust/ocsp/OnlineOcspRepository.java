@@ -1,7 +1,7 @@
 /*
  * Java Trust Project.
  * Copyright (C) 2009 FedICT.
- * Copyright (C) 2014-2018 e-Contract.be BVBA.
+ * Copyright (C) 2014-2020 e-Contract.be BV.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -27,19 +27,18 @@ import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
 import java.util.Date;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpHost;
 import org.apache.http.HttpResponse;
 import org.apache.http.StatusLine;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.HttpPost;
-import org.apache.http.conn.params.ConnRoutePNames;
+import org.apache.http.client.protocol.HttpClientContext;
 import org.apache.http.entity.ByteArrayEntity;
 import org.apache.http.entity.ContentType;
-import org.apache.http.impl.client.DefaultHttpClient;
-import org.apache.http.params.CoreConnectionPNames;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.util.EntityUtils;
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.ASN1Primitive;
@@ -60,6 +59,8 @@ import org.bouncycastle.operator.DigestCalculatorProvider;
 import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder;
 import org.bouncycastle.util.Arrays;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import be.fedict.trust.Credentials;
 import be.fedict.trust.NetworkConfig;
@@ -75,7 +76,7 @@ import be.fedict.trust.ServerType;
  */
 public class OnlineOcspRepository implements OcspRepository {
 
-	private static final Log LOG = LogFactory.getLog(OnlineOcspRepository.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(OnlineOcspRepository.class);
 
     private final static int CONNECTION_TIMEOUT_DURATION = 1000;
 
@@ -130,7 +131,7 @@ public class OnlineOcspRepository implements OcspRepository {
 	private OCSPResp getOcspResponse(final URI ocspUri, final X509Certificate certificate,
 			final X509Certificate issuerCertificate) throws OperatorCreationException,
 			CertificateEncodingException, OCSPException, IOException, ServerNotAvailableException {
-		LOG.debug("OCSP URI: " + ocspUri);
+		LOGGER.debug("OCSP URI: {}", ocspUri);
 		final OCSPReqBuilder ocspReqBuilder = new OCSPReqBuilder();
 		final DigestCalculatorProvider digCalcProv = new JcaDigestCalculatorProviderBuilder()
 				.setProvider(BouncyCastleProvider.PROVIDER_NAME).build();
@@ -155,22 +156,26 @@ public class OnlineOcspRepository implements OcspRepository {
 		httpPost.addHeader("User-Agent", "jTrust OCSP Client");
 		httpPost.setEntity(requestEntity);
 
-		final DefaultHttpClient httpClient = new DefaultHttpClient();
+		final RequestConfig.Builder requestConfigBuilder = RequestConfig.custom().setConnectTimeout(CONNECTION_TIMEOUT_DURATION)
+				.setConnectionRequestTimeout(CONNECTION_TIMEOUT_DURATION).setSocketTimeout(SOCKET_TIMEOUT_DURATION);
+
 		if (null != this.networkConfig) {
-            final HttpHost proxy = new HttpHost(this.networkConfig.getProxyHost(), this.networkConfig.getProxyPort());
-            httpClient.getParams().setParameter(ConnRoutePNames.DEFAULT_PROXY, proxy);
-			httpClient.getParams().setParameter(ConnRoutePNames.DEFAULT_PROXY, proxy);
-			httpClient.getParams().setParameter(CoreConnectionPNames.CONNECTION_TIMEOUT, CONNECTION_TIMEOUT_DURATION);
-			httpClient.getParams().setParameter(CoreConnectionPNames.SO_TIMEOUT, SOCKET_TIMEOUT_DURATION);
+			final HttpHost proxy = new HttpHost(this.networkConfig.getProxyHost(), this.networkConfig.getProxyPort());
+			requestConfigBuilder.setProxy(proxy);
 		}
+		final HttpClientContext httpClientContext = HttpClientContext.create();
 		if (null != this.credentials) {
-			this.credentials.init(httpClient.getCredentialsProvider());
+			this.credentials.init(httpClientContext);
 		}
+		final RequestConfig requestConfig = requestConfigBuilder.build();
+		final HttpClientBuilder httpClientBuilder = HttpClientBuilder.create();
+		httpClientBuilder.setDefaultRequestConfig(requestConfig);
+		final HttpClient httpClient = httpClientBuilder.build();
 
 		HttpResponse httpResponse;
 		int responseCode;
 		try {
-			httpResponse = httpClient.execute(httpPost);
+			httpResponse = httpClient.execute(httpPost, httpClientContext);
 			final StatusLine statusLine = httpResponse.getStatusLine();
 			responseCode = statusLine.getStatusCode();
 		} catch (final IOException e) {
@@ -183,15 +188,15 @@ public class OnlineOcspRepository implements OcspRepository {
 
 		final Header responseContentTypeHeader = httpResponse.getFirstHeader("Content-Type");
 		if (null == responseContentTypeHeader) {
-			LOG.error("no Content-Type response header");
+			LOGGER.error("no Content-Type response header");
 			return null;
 		}
 		final String resultContentType = responseContentTypeHeader.getValue();
 		if (!"application/ocsp-response".equals(resultContentType)) {
-			LOG.error("result content type not application/ocsp-response");
-			LOG.error("actual content-type: " + resultContentType);
+			LOGGER.error("result content type not application/ocsp-response");
+			LOGGER.error("actual content-type: {}", resultContentType);
 			if ("text/html".equals(resultContentType)) {
-				LOG.error("content: " + EntityUtils.toString(httpResponse.getEntity()));
+				LOGGER.error("content: {}", EntityUtils.toString(httpResponse.getEntity()));
 			}
 			return null;
 		}
@@ -200,19 +205,19 @@ public class OnlineOcspRepository implements OcspRepository {
 		if (null != responseContentLengthHeader) {
 			final String resultContentLength = responseContentLengthHeader.getValue();
 			if ("0".equals(resultContentLength)) {
-				LOG.debug("no content returned");
+				LOGGER.debug("no content returned");
 				return null;
 			}
 		}
 
 		final HttpEntity httpEntity = httpResponse.getEntity();
 		final OCSPResp ocspResp = new OCSPResp(httpEntity.getContent());
-		LOG.debug("OCSP response size: " + ocspResp.getEncoded().length + " bytes");
+		LOGGER.debug("OCSP response size: {} bytes", ocspResp.getEncoded().length);
 		httpPost.releaseConnection();
 
 		final int ocspRespStatus = ocspResp.getStatus();
 		if (OCSPResponseStatus.SUCCESSFUL != ocspRespStatus) {
-			LOG.debug("OCSP response status: " + ocspRespStatus);
+			LOGGER.debug("OCSP response status: {}", ocspRespStatus);
 			return ocspResp;
 		}
 
@@ -220,7 +225,7 @@ public class OnlineOcspRepository implements OcspRepository {
 		final BasicOCSPResp basicOCSPResp = (BasicOCSPResp) responseObject;
 		final Extension nonceExtension = basicOCSPResp.getExtension(OCSPObjectIdentifiers.id_pkix_ocsp_nonce);
 		if (null == nonceExtension) {
-			LOG.debug("no nonce extension is response");
+			LOGGER.debug("no nonce extension in response");
 			return ocspResp;
 		}
 
@@ -228,10 +233,10 @@ public class OnlineOcspRepository implements OcspRepository {
 		final ASN1Primitive nonceValue = ASN1Primitive.fromByteArray(nonceExtensionValue.getOctets());
 		final byte[] responseNonce = ((DEROctetString) nonceValue).getOctets();
 		if (!Arrays.areEqual(nonce, responseNonce)) {
-			LOG.error("nonce mismatch");
+			LOGGER.error("nonce mismatch");
 			return null;
 		}
-		LOG.debug("nonce match");
+		LOGGER.debug("nonce match");
 
 		return ocspResp;
 	}

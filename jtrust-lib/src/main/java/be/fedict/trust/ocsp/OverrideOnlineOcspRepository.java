@@ -1,7 +1,7 @@
 /*
  * Java Trust Project.
  * Copyright (C) 2011 FedICT.
- * Copyright (C) 2014 e-Contract.be BVBA.
+ * Copyright (C) 2014-2019 e-Contract.be BVBA.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -25,12 +25,12 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
-import be.fedict.trust.ServerNotAvailableException;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.bouncycastle.cert.ocsp.OCSPResp;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import be.fedict.trust.NetworkConfig;
+import be.fedict.trust.ServerNotAvailableException;
 
 /**
  * An implementation on an online OCSP repository where you can override the
@@ -41,7 +41,7 @@ import be.fedict.trust.NetworkConfig;
  */
 public class OverrideOnlineOcspRepository extends OnlineOcspRepository {
 
-	private static final Log LOG = LogFactory.getLog(OverrideOnlineOcspRepository.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(OverrideOnlineOcspRepository.class);
 
 	private final Map<URI, URI> overrideURIs;
 
@@ -50,25 +50,24 @@ public class OverrideOnlineOcspRepository extends OnlineOcspRepository {
 		this.overrideURIs = new HashMap<>();
 	}
 
-	public OverrideOnlineOcspRepository(NetworkConfig networkConfig) {
+	public OverrideOnlineOcspRepository(final NetworkConfig networkConfig) {
 		super(networkConfig);
 		this.overrideURIs = new HashMap<>();
 	}
 
-	public void overrideOCSP(URI originalOcspUri, URI newOcspUri) {
+	public void overrideOCSP(final URI originalOcspUri, final URI newOcspUri) {
 		this.overrideURIs.put(originalOcspUri, newOcspUri);
 	}
 
 	@Override
-	public OCSPResp findOcspResponse(URI ocspUri, X509Certificate certificate,
-			X509Certificate issuerCertificate, Date validationDate) throws ServerNotAvailableException {
-		URI overrideOcspUri = this.overrideURIs.get(ocspUri);
+	public OCSPResp findOcspResponse(URI ocspUri, final X509Certificate certificate,
+			final X509Certificate issuerCertificate, final Date validationDate) throws ServerNotAvailableException {
+		final URI overrideOcspUri = this.overrideURIs.get(ocspUri);
 		if (null != overrideOcspUri) {
-			LOG.debug("Overriding OCSP URI: " + ocspUri + " with "
-					+ overrideOcspUri);
+			LOGGER.debug("Overriding OCSP URI: {} with {}", ocspUri, overrideOcspUri);
 			ocspUri = overrideOcspUri;
 		} else {
-			LOG.debug("not overriding OCSP URI: " + ocspUri);
+			LOGGER.debug("not overriding OCSP URI: {}", ocspUri);
 		}
 		return super.findOcspResponse(ocspUri, certificate, issuerCertificate, validationDate);
 	}

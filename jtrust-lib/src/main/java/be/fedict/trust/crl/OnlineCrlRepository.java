@@ -1,7 +1,7 @@
 /*
  * Java Trust Project.
  * Copyright (C) 2009 FedICT.
- * Copyright (C) 2014 e-Contract.be BVBA.
+ * Copyright (C) 2014-2021 e-Contract.be BV.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -31,19 +31,22 @@ import java.security.cert.X509CRL;
 import java.security.cert.X509Certificate;
 import java.util.Date;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpHost;
 import org.apache.http.HttpResponse;
 import org.apache.http.StatusLine;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.HttpGet;
-import org.apache.http.conn.params.ConnRoutePNames;
-import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.client.protocol.HttpClientContext;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.bouncycastle.x509.NoSuchParserException;
+import org.bouncycastle.x509.util.StreamParsingException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import be.fedict.trust.Credentials;
 import be.fedict.trust.NetworkConfig;
-import org.apache.http.params.CoreConnectionPNames;
 import be.fedict.trust.ServerNotAvailableException;
 import be.fedict.trust.ServerType;
 
@@ -55,7 +58,7 @@ import be.fedict.trust.ServerType;
  */
 public class OnlineCrlRepository implements CrlRepository {
 
-	private static final Log LOG = LogFactory.getLog(OnlineCrlRepository.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(OnlineCrlRepository.class);
 
 	private final static int CONNECTION_TIMEOUT_DURATION = 1000;
 
@@ -68,8 +71,8 @@ public class OnlineCrlRepository implements CrlRepository {
 	/**
 	 * Main construtor.
 	 * 
-	 * @param networkConfig
-	 *            the optional network configuration used for downloading CRLs.
+	 * @param networkConfig the optional network configuration used for downloading
+	 *                      CRLs.
 	 */
 	public OnlineCrlRepository(final NetworkConfig networkConfig) {
 		this.networkConfig = networkConfig;
@@ -96,31 +99,34 @@ public class OnlineCrlRepository implements CrlRepository {
 		try {
 			return getCrl(crlUri);
 		} catch (final CRLException e) {
-			LOG.debug("error parsing CRL: " + e.getMessage(), e);
+			LOGGER.debug("error parsing CRL: {}", e.getMessage(), e);
 			return null;
-		} catch (final IOException | CertificateException | NoSuchProviderException e) {
-			LOG.error("find CRL error: " + e.getMessage(), e);
+		} catch (final Exception e) {
+			LOGGER.error("find CRL error: {}", e.getMessage(), e);
 			return null;
 		}
 	}
 
-	private X509CRL getCrl(final URI crlUri) throws IOException,
-			CertificateException, CRLException, NoSuchProviderException, ServerNotAvailableException {
-		final DefaultHttpClient httpClient = new DefaultHttpClient();
+	private X509CRL getCrl(final URI crlUri) throws IOException, CertificateException, CRLException, NoSuchProviderException,
+			NoSuchParserException, StreamParsingException, ServerNotAvailableException {
+		final RequestConfig.Builder requestConfigBuilder = RequestConfig.custom().setConnectTimeout(CONNECTION_TIMEOUT_DURATION)
+				.setConnectionRequestTimeout(CONNECTION_TIMEOUT_DURATION).setSocketTimeout(SOCKET_TIMEOUT_DURATION);
 
 		if (null != this.networkConfig) {
 			final HttpHost proxy = new HttpHost(this.networkConfig.getProxyHost(), this.networkConfig.getProxyPort());
-			httpClient.getParams().setParameter(ConnRoutePNames.DEFAULT_PROXY, proxy);
-			httpClient.getParams().setParameter(CoreConnectionPNames.CONNECTION_TIMEOUT, CONNECTION_TIMEOUT_DURATION);
-			httpClient.getParams().setParameter(CoreConnectionPNames.SO_TIMEOUT, SOCKET_TIMEOUT_DURATION);
+			requestConfigBuilder.setProxy(proxy);
 		}
-
+		final HttpClientContext httpClientContext = HttpClientContext.create();
 		if (null != this.credentials) {
-			this.credentials.init(httpClient.getCredentialsProvider());
+			this.credentials.init(httpClientContext);
 		}
+		final RequestConfig requestConfig = requestConfigBuilder.build();
+		final HttpClientBuilder httpClientBuilder = HttpClientBuilder.create();
+		httpClientBuilder.setDefaultRequestConfig(requestConfig);
+		final HttpClient httpClient = httpClientBuilder.build();
 
 		final String downloadUrl = crlUri.toURL().toString();
-		LOG.debug("downloading CRL from: " + downloadUrl);
+		LOGGER.debug("downloading CRL from: {}", downloadUrl);
 		final HttpGet httpGet = new HttpGet(downloadUrl);
 		httpGet.addHeader("User-Agent", "jTrust CRL Client");
 
@@ -139,17 +145,16 @@ public class OnlineCrlRepository implements CrlRepository {
 		}
 
 		final CertificateFactory certificateFactory = CertificateFactory.getInstance("X.509", "BC");
-		LOG.debug("certificate factory provider: " + certificateFactory.getProvider().getName());
-		LOG.debug("certificate factory class: " + certificateFactory.getClass().getName());
-
+		LOGGER.debug("certificate factory provider: {}", certificateFactory.getProvider().getName());
+		LOGGER.debug("certificate factory class: {}", certificateFactory.getClass().getName());
 		final HttpEntity httpEntity = httpResponse.getEntity();
 		try (final InputStream content = httpEntity.getContent()) {
 			final X509CRL crl = (X509CRL) certificateFactory.generateCRL(content);
 			if (crl != null) {
-				LOG.debug("X509CRL class: " + crl.getClass().getName());
-				LOG.debug("CRL size: " + crl.getEncoded().length + " bytes");
+				LOGGER.debug("X509CRL class: {}", crl.getClass().getName());
+				LOGGER.debug("CRL size: {} bytes", crl.getEncoded().length);
 			} else {
-				LOG.debug("X509CRL is null");
+				LOGGER.error("null CRL");
 			}
 			return crl;
 		} finally {

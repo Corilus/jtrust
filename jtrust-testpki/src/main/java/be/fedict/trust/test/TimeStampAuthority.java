@@ -1,6 +1,6 @@
 /*
  * Java Trust Project.
- * Copyright (C) 2018 e-Contract.be BVBA.
+ * Copyright (C) 2018-2021 e-Contract.be BV.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -23,6 +23,9 @@ import java.io.OutputStream;
 import java.math.BigInteger;
 import java.security.KeyPair;
 import java.security.cert.X509Certificate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -36,11 +39,11 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.bouncycastle.asn1.ASN1EncodableVector;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.DERSet;
+import org.bouncycastle.asn1.cmp.PKIFailureInfo;
+import org.bouncycastle.asn1.cmp.PKIStatus;
 import org.bouncycastle.asn1.cms.Attribute;
 import org.bouncycastle.asn1.cms.AttributeTable;
 import org.bouncycastle.asn1.cms.CMSAttributes;
@@ -57,9 +60,10 @@ import org.bouncycastle.tsp.TimeStampResponse;
 import org.bouncycastle.tsp.TimeStampResponseGenerator;
 import org.bouncycastle.tsp.TimeStampTokenGenerator;
 import org.bouncycastle.util.Store;
-import org.joda.time.DateTime;
-import org.mortbay.jetty.servlet.ServletHolder;
-import org.mortbay.jetty.testing.ServletTester;
+import org.eclipse.jetty.servlet.ServletContextHandler;
+import org.eclipse.jetty.servlet.ServletHolder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Implementation of a timestamp authority according to RFC 3161.
@@ -67,7 +71,7 @@ import org.mortbay.jetty.testing.ServletTester;
  * @author Frank Cornelis
  *
  */
-public class TimeStampAuthority implements EndpointProvider {
+public class TimeStampAuthority implements EndpointProvider, FailableEndpoint {
 
 	private final World world;
 
@@ -83,6 +87,10 @@ public class TimeStampAuthority implements EndpointProvider {
 
 	private String url;
 
+	private String keyAlgorithm;
+
+	private FailBehavior failBehavior;
+
 	private final static Map<String, TimeStampAuthority> timeStampAuthorities;
 
 	static {
@@ -93,8 +101,7 @@ public class TimeStampAuthority implements EndpointProvider {
 	 * Main constructor.
 	 * 
 	 * @param world
-	 * @param certificationAuthority
-	 *            the TSA issuing CA.
+	 * @param certificationAuthority the TSA issuing CA.
 	 */
 	public TimeStampAuthority(World world, CertificationAuthority certificationAuthority) {
 		this.identifier = UUID.randomUUID().toString();
@@ -102,12 +109,27 @@ public class TimeStampAuthority implements EndpointProvider {
 		this.world = world;
 		this.world.addEndpointProvider(this);
 		this.certificationAuthority = certificationAuthority;
+		this.keyAlgorithm = "RSA";
+	}
+
+	public String getKeyAlgorithm() {
+		return this.keyAlgorithm;
+	}
+
+	/**
+	 * Sets the key algorithm used by this time stamp authority. This can be either
+	 * "RSA" or "EC".
+	 * 
+	 * @param keyAlgorithm
+	 */
+	public void setKeyAlgorithm(String keyAlgorithm) {
+		this.keyAlgorithm = keyAlgorithm;
 	}
 
 	@Override
-	public void addEndpoints(ServletTester servletTester) throws Exception {
+	public void addEndpoints(ServletContextHandler context) throws Exception {
 		String pathSpec = "/" + this.identifier + "/tsa";
-		ServletHolder servletHolder = servletTester.addServlet(TSAServlet.class, pathSpec);
+		ServletHolder servletHolder = context.addServlet(TSAServlet.class, pathSpec);
 		servletHolder.setInitParameter("identifier", this.identifier);
 	}
 
@@ -128,7 +150,11 @@ public class TimeStampAuthority implements EndpointProvider {
 			throw new IllegalStateException();
 		}
 
-		this.keyPair = PKITestUtils.generateKeyPair();
+		if ("RSA".equals(this.keyAlgorithm)) {
+			this.keyPair = PKITestUtils.generateKeyPair();
+		} else {
+			this.keyPair = PKITestUtils.generateKeyPair("EC");
+		}
 
 		CertificationAuthority issuer = this.certificationAuthority;
 		if (issuer != null) {
@@ -166,8 +192,13 @@ public class TimeStampAuthority implements EndpointProvider {
 		return this.certificate;
 	}
 
+	@Override
+	public void setFailureBehavior(FailBehavior failBehavior) {
+		this.failBehavior = failBehavior;
+	}
+
 	public static final class TSAServlet extends HttpServlet {
-		private static final Log LOG = LogFactory.getLog(TSAServlet.class);
+		private static final Logger LOGGER = LoggerFactory.getLogger(TSAServlet.class);
 
 		private static final long serialVersionUID = 1L;
 
@@ -179,7 +210,7 @@ public class TimeStampAuthority implements EndpointProvider {
 			try {
 				_doPost(request, response);
 			} catch (Exception e) {
-				LOG.error(e);
+				LOGGER.error("error: " + e.getMessage(), e);
 			}
 		}
 
@@ -190,29 +221,42 @@ public class TimeStampAuthority implements EndpointProvider {
 			TimeStampRequest timeStampRequest = new TimeStampRequest(reqData);
 
 			// CMS signing-time also has to change accordingly
-			DateTime now = timeStampAuthority.certificationAuthority.getClock().getTime();
-			Attribute attr = new Attribute(CMSAttributes.signingTime, new DERSet(new Time(now.toDate())));
+			LocalDateTime now = timeStampAuthority.certificationAuthority.getClock().getTime();
+			Attribute attr = new Attribute(CMSAttributes.signingTime,
+					new DERSet(new Time(Date.from(now.atZone(ZoneId.systemDefault()).toInstant()))));
 			ASN1EncodableVector v = new ASN1EncodableVector();
 			v.add(attr);
+			String signatureAlgorithm;
+			if ("RSA".equals(timeStampAuthority.keyAlgorithm)) {
+				signatureAlgorithm = "SHA256withRSA";
+			} else {
+				signatureAlgorithm = "SHA256withECDSA";
+			}
 			TimeStampTokenGenerator tsTokenGen = new TimeStampTokenGenerator(
 					new JcaSimpleSignerInfoGeneratorBuilder()
 							.setSignedAttributeGenerator(
 									new DefaultSignedAttributeTableGenerator(new AttributeTable(v)))
-							.build("SHA256withRSA", timeStampAuthority.keyPair.getPrivate(),
+							.build(signatureAlgorithm, timeStampAuthority.keyPair.getPrivate(),
 									timeStampAuthority.certificate),
 					new JcaDigestCalculatorProviderBuilder().build().get(
 							new AlgorithmIdentifier(NISTObjectIdentifiers.id_sha256)),
 					new ASN1ObjectIdentifier("1.2"));
 
-			LOG.debug("certificate chain size: " + timeStampAuthority.certificateChain.size());
+			LOGGER.debug("certificate chain size: {}", timeStampAuthority.certificateChain.size());
 			Store certs = new JcaCertStore(timeStampAuthority.certificateChain);
 			tsTokenGen.addCertificates(certs);
 
 			TimeStampResponseGenerator timeStampResponseGenerator = new TimeStampResponseGenerator(tsTokenGen,
 					TSPAlgorithms.ALLOWED);
-			LOG.debug("genTime: " + now);
-			TimeStampResponse timeStampResponse = timeStampResponseGenerator.generate(timeStampRequest, BigInteger.ONE,
-					now.toDate());
+			LOGGER.debug("genTime: {}", now);
+			TimeStampResponse timeStampResponse;
+			if (null != timeStampAuthority.failBehavior && timeStampAuthority.failBehavior.fail()) {
+				timeStampResponse = timeStampResponseGenerator.generateFailResponse(PKIStatus.REJECTION,
+						PKIFailureInfo.systemFailure, "woops");
+			} else {
+				timeStampResponse = timeStampResponseGenerator.generate(timeStampRequest, BigInteger.ONE,
+						Date.from(now.atZone(ZoneId.systemDefault()).toInstant()));
+			}
 
 			response.setContentType("application/timestamp-reply");
 			OutputStream outputStream = response.getOutputStream();

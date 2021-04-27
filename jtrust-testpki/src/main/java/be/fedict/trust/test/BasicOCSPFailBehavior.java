@@ -1,6 +1,6 @@
 /*
  * Java Trust Project.
- * Copyright (C) 2018 e-Contract.be BVBA.
+ * Copyright (C) 2021 e-Contract.be BV.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -18,20 +18,37 @@
 
 package be.fedict.trust.test;
 
-import org.joda.time.DateTime;
+public class BasicOCSPFailBehavior implements OCSPFailBehavior {
 
-/**
- * Interface for a clock used by a unit test PKI world.
- * 
- * @author Frank Cornelis
- *
- */
-public interface Clock {
+	private boolean failing;
+
+	private Clock failingClock;
+
+	@Override
+	public boolean fail() {
+		return this.failing;
+	}
+
+	@Override
+	public Clock getFailingClock() {
+		return this.failingClock;
+	}
 
 	/**
-	 * Gives back the "current" time of the clock.
+	 * Sets whether the corresponding failable endpoint should fail or not.
 	 * 
-	 * @return
+	 * @param failing
 	 */
-	DateTime getTime();
+	public void setFailing(boolean failing) {
+		this.failing = failing;
+	}
+
+	/**
+	 * Sets a failing clock for the OCSP endpoint.
+	 * 
+	 * @param failingClock
+	 */
+	public void setFailingClock(Clock failingClock) {
+		this.failingClock = failingClock;
+	}
 }

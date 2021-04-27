@@ -1,6 +1,6 @@
 /*
  * Java Trust Project.
- * Copyright (C) 2018 e-Contract.be BVBA.
+ * Copyright (C) 2021 e-Contract.be BV.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -18,35 +18,7 @@
 
 package be.fedict.trust.test;
 
-import org.joda.time.DateTime;
+public interface OCSPFailBehavior extends FailBehavior {
 
-/**
- * Implementation of a clock that ticks from a given starting point.
- * 
- * @author Frank Cornelis
- *
- */
-public class TickingClock implements Clock {
-
-	private DateTime start;
-
-	public TickingClock(DateTime start) {
-		this.start = start;
-	}
-
-	@Override
-	public DateTime getTime() {
-		DateTime now = this.start;
-		this.start = this.start.plusSeconds(1);
-		return now;
-	}
-
-	/**
-	 * Resets the clock's start time to the given value.
-	 * 
-	 * @param start
-	 */
-	public void reset(DateTime start) {
-		this.start = start;
-	}
+	Clock getFailingClock();
 }

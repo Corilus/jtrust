@@ -1,7 +1,7 @@
 /*
  * Java Trust Project.
  * Copyright (C) 2009 FedICT.
- * Copyright (C) 2017 e-Contract.be BVBA.
+ * Copyright (C) 2017-2021 e-Contract.be BV.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -19,18 +19,18 @@
 
 package test.unit.be.fedict.trust.constraints;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.InputStream;
 import java.security.KeyPair;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.time.LocalDateTime;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.joda.time.DateTime;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import be.fedict.trust.constraints.QCStatementsCertificateConstraint;
 import be.fedict.trust.linker.TrustLinkerResultException;
@@ -39,7 +39,7 @@ import be.fedict.trust.test.PKITestUtils;
 
 public class QCStatementsCertificateConstraintTest {
 
-	private static final Log LOG = LogFactory.getLog(QCStatementsCertificateConstraintTest.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(QCStatementsCertificateConstraintTest.class);
 
 	@Test
 	public void testNoQCStatements() throws Exception {
@@ -48,8 +48,8 @@ public class QCStatementsCertificateConstraintTest {
 		final QCStatementsCertificateConstraint testedInstance = new QCStatementsCertificateConstraint(Boolean.TRUE);
 
 		final KeyPair keyPair = PKITestUtils.generateKeyPair();
-		final DateTime notBefore = new DateTime();
-		final DateTime notAfter = notBefore.plusMonths(1);
+		final LocalDateTime notBefore = LocalDateTime.now();
+		final LocalDateTime notAfter = notBefore.plusMonths(1);
 		final X509Certificate certificate = PKITestUtils.generateSelfSignedCertificate(keyPair, "CN=Test", notBefore,
 				notAfter);
 
@@ -69,8 +69,8 @@ public class QCStatementsCertificateConstraintTest {
 		final QCStatementsCertificateConstraint testedInstance = new QCStatementsCertificateConstraint(Boolean.TRUE);
 
 		final KeyPair keyPair = PKITestUtils.generateKeyPair();
-		final DateTime notBefore = new DateTime();
-		final DateTime notAfter = notBefore.plusMonths(1);
+		final LocalDateTime notBefore = LocalDateTime.now();
+		final LocalDateTime notAfter = notBefore.plusMonths(1);
 		final X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=Test", notBefore,
 				notAfter, null, keyPair.getPrivate(), true, -1, null, null, null, "SHA1withRSA", false, false, false,
 				null, null, Boolean.TRUE);
@@ -86,8 +86,8 @@ public class QCStatementsCertificateConstraintTest {
 		final QCStatementsCertificateConstraint testedInstance = new QCStatementsCertificateConstraint(Boolean.TRUE);
 
 		final KeyPair keyPair = PKITestUtils.generateKeyPair();
-		final DateTime notBefore = new DateTime();
-		final DateTime notAfter = notBefore.plusMonths(1);
+		final LocalDateTime notBefore = LocalDateTime.now();
+		final LocalDateTime notAfter = notBefore.plusMonths(1);
 		final X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=Test", notBefore,
 				notAfter, null, keyPair.getPrivate(), true, -1, null, null, null, "SHA1withRSA", false, false, false,
 				null, null, Boolean.FALSE);
@@ -108,8 +108,8 @@ public class QCStatementsCertificateConstraintTest {
 		final QCStatementsCertificateConstraint testedInstance = new QCStatementsCertificateConstraint(null);
 
 		final KeyPair keyPair = PKITestUtils.generateKeyPair();
-		final DateTime notBefore = new DateTime();
-		final DateTime notAfter = notBefore.plusMonths(1);
+		final LocalDateTime notBefore = LocalDateTime.now();
+		final LocalDateTime notAfter = notBefore.plusMonths(1);
 		final X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=Test", notBefore,
 				notAfter, null, keyPair.getPrivate(), true, -1, null, null, null, "SHA1withRSA", false, false, false,
 				null, null, Boolean.TRUE);
@@ -126,8 +126,8 @@ public class QCStatementsCertificateConstraintTest {
 				Boolean.TRUE);
 
 		final KeyPair keyPair = PKITestUtils.generateKeyPair();
-		final DateTime notBefore = new DateTime();
-		final DateTime notAfter = notBefore.plusMonths(1);
+		final LocalDateTime notBefore = LocalDateTime.now();
+		final LocalDateTime notAfter = notBefore.plusMonths(1);
 		final X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=Test", notBefore,
 				notAfter, null, keyPair.getPrivate(), true, -1, null, null, null, "SHA1withRSA", false, false, false,
 				null, null, Boolean.TRUE, false, true);
@@ -142,7 +142,7 @@ public class QCStatementsCertificateConstraintTest {
 				.getResourceAsStream("/qcstatements.der");
 		final CertificateFactory certificateFactory = CertificateFactory.getInstance("X.509");
 		final X509Certificate certificate = (X509Certificate) certificateFactory.generateCertificate(certInputStream);
-		LOG.debug("certificate: " + certificate);
+		LOGGER.debug("certificate: {}", certificate);
 
 		final QCStatementsCertificateConstraint testedInstance = new QCStatementsCertificateConstraint(true, true);
 

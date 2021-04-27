@@ -1,6 +1,7 @@
 /*
  * Java Trust Project.
  * Copyright (C) 2009 FedICT.
+ * Copyright (C) 2020-2021 e-Contract.be BV.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -18,9 +19,11 @@
 
 package test.unit.be.fedict.trust;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
+import static be.fedict.trust.test.World.getFreePort;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -29,6 +32,7 @@ import java.security.KeyPair;
 import java.security.Security;
 import java.security.cert.X509CRL;
 import java.security.cert.X509Certificate;
+import java.time.LocalDateTime;
 import java.util.Date;
 
 import javax.servlet.ServletException;
@@ -36,24 +40,23 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import be.fedict.trust.ServerNotAvailableException;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.joda.time.DateTime;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
-import org.mortbay.jetty.testing.ServletTester;
+import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.servlet.ServletContextHandler;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import be.fedict.trust.crl.OnlineCrlRepository;
 import be.fedict.trust.test.PKITestUtils;
 
 public class OnlineCrlRepositoryTest {
 
-	private ServletTester servletTester;
+	private Server server;
 
 	private URI crlUri;
 
@@ -61,20 +64,24 @@ public class OnlineCrlRepositoryTest {
 
 	private OnlineCrlRepository testedInstance;
 
-	@BeforeClass
+	@BeforeAll
 	public static void oneTimeSetUp() throws Exception {
 
 		Security.addProvider(new BouncyCastleProvider());
 	}
 
-	@Before
+	@BeforeEach
 	public void setUp() throws Exception {
-		this.servletTester = new ServletTester();
-		String pathSpec = "/test.crl";
-		this.servletTester.addServlet(CrlRepositoryTestServlet.class, pathSpec);
-		this.servletTester.start();
+		final int freePort = getFreePort();
+		this.server = new Server(freePort);
+		final ServletContextHandler servletContextHandler = new ServletContextHandler();
+		servletContextHandler.setContextPath("/pki");
+		final String pathSpec = "/test.crl";
+		servletContextHandler.addServlet(CrlRepositoryTestServlet.class, pathSpec);
+		this.server.setHandler(servletContextHandler);
+		this.server.start();
 
-		String servletUrl = this.servletTester.createSocketConnector(true);
+		final String servletUrl = "http://localhost:" + freePort + "/pki";
 		this.crlUri = new URI(servletUrl + pathSpec);
 		this.validationDate = new Date();
 
@@ -83,27 +90,31 @@ public class OnlineCrlRepositoryTest {
 		CrlRepositoryTestServlet.reset();
 	}
 
-	@After
+	@AfterEach
 	public void tearDown() throws Exception {
-		this.servletTester.stop();
+		this.server.stop();
 	}
 
-	@Test(expected = ServerNotAvailableException.class)
+	@Test
 	public void testCrlNotFound() throws Exception {
 		// setup
 		CrlRepositoryTestServlet.setResponseStatus(HttpServletResponse.SC_NOT_FOUND);
 
 		// operate
-		this.testedInstance.findCrl(this.crlUri, null, this.validationDate);
+		final X509CRL result = this.testedInstance.findCrl(this.crlUri, null, this.validationDate);
+
+		fail("Expected ServerNotAvailableException, but got: " + result);
 	}
 
-	@Test(expected = ServerNotAvailableException.class)
+	@Test
 	public void testCrlServerNotResponding() throws Exception {
 		// setup
 		CrlRepositoryTestServlet.setResponseStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
 
 		// operate
-		this.testedInstance.findCrl(this.crlUri, null, this.validationDate);
+		final X509CRL result = this.testedInstance.findCrl(this.crlUri, null, this.validationDate);
+
+		fail("Expected ServerNotAvailableException, but got: " + result);
 	}
 
 	@Test
@@ -112,21 +123,19 @@ public class OnlineCrlRepositoryTest {
 		CrlRepositoryTestServlet.setCrlData("foobar".getBytes());
 
 		// operate
-		X509CRL crl = this.testedInstance.findCrl(this.crlUri, null,
-				this.validationDate);
+		final X509CRL crl = this.testedInstance.findCrl(this.crlUri, null, this.validationDate);
 
 		// verify
 		assertNull(crl);
 	}
-	
+
 	@Test
 	public void testEmptyCrl() throws Exception {
 		// setup
 		CrlRepositoryTestServlet.setCrlData(new byte[0]);
 
 		// operate
-		X509CRL crl = this.testedInstance.findCrl(this.crlUri, null,
-				this.validationDate);
+		final X509CRL crl = this.testedInstance.findCrl(this.crlUri, null, this.validationDate);
 
 		// verify
 		assertNull(crl);
@@ -135,19 +144,16 @@ public class OnlineCrlRepositoryTest {
 	@Test
 	public void testDownloadCrl() throws Exception {
 		// setup
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
-		DateTime notBefore = new DateTime();
-		DateTime notAfter = notBefore.plusMonths(1);
-		X509Certificate certificate = PKITestUtils
-				.generateSelfSignedCertificate(keyPair, "CN=Test", notBefore,
-						notAfter);
-		X509CRL crl = PKITestUtils.generateCrl(keyPair.getPrivate(),
-				certificate, notBefore, notAfter);
+		final KeyPair keyPair = PKITestUtils.generateKeyPair();
+		final LocalDateTime notBefore = LocalDateTime.now();
+		final LocalDateTime notAfter = notBefore.plusMonths(1);
+		final X509Certificate certificate = PKITestUtils.generateSelfSignedCertificate(keyPair, "CN=Test", notBefore,
+				notAfter);
+		final X509CRL crl = PKITestUtils.generateCrl(keyPair.getPrivate(), certificate, notBefore, notAfter);
 		CrlRepositoryTestServlet.setCrlData(crl.getEncoded());
 
 		// operate
-		X509CRL result = this.testedInstance.findCrl(this.crlUri, certificate,
-				this.validationDate);
+		final X509CRL result = this.testedInstance.findCrl(this.crlUri, certificate, this.validationDate);
 
 		// verify
 		assertNotNull(result);
@@ -158,8 +164,7 @@ public class OnlineCrlRepositoryTest {
 
 		private static final long serialVersionUID = 1L;
 
-		private static final Log LOG = LogFactory
-				.getLog(CrlRepositoryTestServlet.class);
+		private static final Log LOG = LogFactory.getLog(CrlRepositoryTestServlet.class);
 
 		private static int responseStatus;
 
@@ -170,21 +175,20 @@ public class OnlineCrlRepositoryTest {
 			CrlRepositoryTestServlet.crlData = null;
 		}
 
-		public static void setResponseStatus(int responseStatus) {
+		public static void setResponseStatus(final int responseStatus) {
 			CrlRepositoryTestServlet.responseStatus = responseStatus;
 		}
 
-		public static void setCrlData(byte[] crlData) {
+		public static void setCrlData(final byte[] crlData) {
 			CrlRepositoryTestServlet.crlData = crlData;
 		}
 
 		@Override
-		protected void doGet(HttpServletRequest request,
-				HttpServletResponse response) throws ServletException,
-				IOException {
+		protected void doGet(final HttpServletRequest request, final HttpServletResponse response)
+				throws ServletException, IOException {
 			LOG.debug("doGet");
 			if (null != CrlRepositoryTestServlet.crlData) {
-				OutputStream outputStream = response.getOutputStream();
+				final OutputStream outputStream = response.getOutputStream();
 				IOUtils.write(CrlRepositoryTestServlet.crlData, outputStream);
 			}
 			if (0 != CrlRepositoryTestServlet.responseStatus) {

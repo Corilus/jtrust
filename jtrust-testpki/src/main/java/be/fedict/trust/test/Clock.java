@@ -1,6 +1,6 @@
 /*
  * Java Trust Project.
- * Copyright (C) 2018 e-Contract.be BVBA.
+ * Copyright (C) 2018-2021 e-Contract.be BV.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -18,30 +18,20 @@
 
 package be.fedict.trust.test;
 
-import org.mortbay.jetty.testing.ServletTester;
+import java.time.LocalDateTime;
 
 /**
- * Interface for endpoint providers.
+ * Interface for a clock used by a unit test PKI world.
  * 
  * @author Frank Cornelis
- * @see World
+ *
  */
-public interface EndpointProvider {
+public interface Clock {
 
 	/**
-	 * Adds a servlet endpoint to the Jetty servlet tester.
+	 * Gives back the "current" time of the clock.
 	 * 
-	 * @param servletTester
-	 * @throws Exception
+	 * @return
 	 */
-	void addEndpoints(ServletTester servletTester) throws Exception;
-
-	/**
-	 * Called when the corresponding world has been started.
-	 * 
-	 * @param url
-	 *            the base URL of the embedded Jetty servlet container.
-	 * @throws Exception
-	 */
-	void started(String url) throws Exception;
+	LocalDateTime getTime();
 }

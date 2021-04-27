@@ -1,6 +1,6 @@
 /*
  * Java Trust Project.
- * Copyright (C) 2018 e-Contract.be BVBA.
+ * Copyright (C) 2018-2021 e-Contract.be BV.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -24,6 +24,8 @@ import java.security.KeyPair;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.cert.X509Certificate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -36,8 +38,6 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.bouncycastle.asn1.x509.AuthorityInformationAccess;
 import org.bouncycastle.asn1.x509.CRLReason;
 import org.bouncycastle.asn1.x509.Extension;
@@ -61,9 +61,10 @@ import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.DigestCalculatorProvider;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder;
-import org.joda.time.DateTime;
-import org.mortbay.jetty.servlet.ServletHolder;
-import org.mortbay.jetty.testing.ServletTester;
+import org.eclipse.jetty.servlet.ServletContextHandler;
+import org.eclipse.jetty.servlet.ServletHolder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Implementation of an OCSP revocation service.
@@ -71,9 +72,7 @@ import org.mortbay.jetty.testing.ServletTester;
  * @author Frank Cornelis
  *
  */
-public class OCSPRevocationService implements RevocationService {
-
-	private static final Log LOG = LogFactory.getLog(OCSPRevocationService.class);
+public class OCSPRevocationService implements RevocationService, FailableEndpoint {
 
 	private final String identifier;
 
@@ -84,6 +83,8 @@ public class OCSPRevocationService implements RevocationService {
 	private CertificationAuthority certificationAuthority;
 
 	private static final Map<String, OCSPRevocationService> ocspRevocationServices;
+
+	private FailBehavior failBehavior;
 
 	private PublicKey ocspResponderPublicKey;
 	private PrivateKey ocspResponderPrivateKey;
@@ -103,9 +104,8 @@ public class OCSPRevocationService implements RevocationService {
 	/**
 	 * Constructor.
 	 * 
-	 * @param withOcspResponderCertificate
-	 *            set to <code>true</code> to have an explicit OCSP responder
-	 *            certificate.
+	 * @param withOcspResponderCertificate set to <code>true</code> to have an
+	 *                                     explicit OCSP responder certificate.
 	 */
 	public OCSPRevocationService(boolean withOcspResponderCertificate) {
 		this.identifier = UUID.randomUUID().toString();
@@ -122,9 +122,9 @@ public class OCSPRevocationService implements RevocationService {
 	}
 
 	@Override
-	public void addEndpoints(ServletTester servletTester) {
+	public void addEndpoints(ServletContextHandler context) {
 		String pathSpec = "/" + this.identifier + "/ocsp";
-		ServletHolder servletHolder = servletTester.addServlet(OCSPServlet.class, pathSpec);
+		ServletHolder servletHolder = context.addServlet(OCSPServlet.class, pathSpec);
 		servletHolder.setInitParameter("identifier", this.identifier);
 
 	}
@@ -143,7 +143,13 @@ public class OCSPRevocationService implements RevocationService {
 	 */
 	public void reissueCertificate(String dn) throws Exception {
 		if (this.withOcspResponderCertificate) {
-			KeyPair ocspResponderKeyPair = PKITestUtils.generateKeyPair();
+			KeyPair ocspResponderKeyPair;
+			if (this.certificationAuthority.getSignatureAlgorithm().contains("RSA")) {
+				ocspResponderKeyPair = PKITestUtils.generateKeyPair();
+			} else {
+				ocspResponderKeyPair = PKITestUtils.generateKeyPair("EC");
+			}
+
 			this.ocspResponderPublicKey = ocspResponderKeyPair.getPublic();
 			this.ocspResponderPrivateKey = ocspResponderKeyPair.getPrivate();
 			this.ocspResponderCertificate = this.certificationAuthority.issueOCSPResponder(this.ocspResponderPublicKey,
@@ -155,7 +161,7 @@ public class OCSPRevocationService implements RevocationService {
 	}
 
 	public static final class OCSPServlet extends HttpServlet {
-		private static final Log LOG = LogFactory.getLog(OCSPServlet.class);
+		private static final Logger LOGGER = LoggerFactory.getLogger(OCSPServlet.class);
 
 		private static final long serialVersionUID = 1L;
 
@@ -167,12 +173,15 @@ public class OCSPRevocationService implements RevocationService {
 			try {
 				_doPost(request, response);
 			} catch (Exception e) {
-				LOG.error(e);
+				LOGGER.error("OCSP error: " + e.getMessage(), e);
 			}
 		}
 
 		private void _doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {
 			OCSPRevocationService ocspRevocationService = getOCSPRevocationService();
+			if (null != ocspRevocationService.failBehavior && ocspRevocationService.failBehavior.fail()) {
+				throw new RuntimeException("failing OCSP responder");
+			}
 
 			byte[] reqData = IOUtils.toByteArray(request.getInputStream());
 			OCSPReq ocspReq = new OCSPReq(reqData);
@@ -182,10 +191,18 @@ public class OCSPRevocationService implements RevocationService {
 			BasicOCSPRespBuilder basicOCSPRespBuilder = new JcaBasicOCSPRespBuilder(
 					ocspRevocationService.ocspResponderPublicKey, digCalcProv.get(CertificateID.HASH_SHA1));
 
-			Clock clock = ocspRevocationService.certificationAuthority.getClock();
-			DateTime now = clock.getTime();
-			DateTime thisUpdate = now.minusSeconds(1);
-			DateTime nextUpdate = thisUpdate.plusMinutes(1);
+			Clock clock = null;
+			if (null != ocspRevocationService.failBehavior
+					&& (ocspRevocationService.failBehavior instanceof OCSPFailBehavior)) {
+				OCSPFailBehavior ocspFailBehavior = (OCSPFailBehavior) ocspRevocationService.failBehavior;
+				clock = ocspFailBehavior.getFailingClock();
+			}
+			if (null == clock) {
+				clock = ocspRevocationService.certificationAuthority.getClock();
+			}
+			LocalDateTime now = clock.getTime();
+			LocalDateTime thisUpdate = now.minusSeconds(1);
+			LocalDateTime nextUpdate = thisUpdate.plusMinutes(1);
 
 			// request processing
 			Req[] requestList = ocspReq.getRequestList();
@@ -195,15 +212,18 @@ public class OCSPRevocationService implements RevocationService {
 				if (ocspRevocationService.isUnknownCertificate(certificateID)) {
 					certificateStatus = new UnknownStatus();
 				} else {
-					Date revocationDate = ocspRevocationService.getRevocationDate(certificateID);
+					LocalDateTime revocationDate = ocspRevocationService.getRevocationDate(certificateID);
 					if (null == revocationDate) {
 						certificateStatus = CertificateStatus.GOOD;
 					} else {
-						certificateStatus = new RevokedStatus(revocationDate, CRLReason.privilegeWithdrawn);
+						certificateStatus = new RevokedStatus(
+								Date.from(revocationDate.atZone(ZoneId.systemDefault()).toInstant()),
+								CRLReason.privilegeWithdrawn);
 					}
 				}
-				basicOCSPRespBuilder.addResponse(certificateID, certificateStatus, thisUpdate.toDate(),
-						nextUpdate.toDate(), null);
+				basicOCSPRespBuilder.addResponse(certificateID, certificateStatus,
+						Date.from(thisUpdate.atZone(ZoneId.systemDefault()).toInstant()),
+						Date.from(nextUpdate.atZone(ZoneId.systemDefault()).toInstant()), null);
 			}
 
 			// basic response generation
@@ -215,9 +235,11 @@ public class OCSPRevocationService implements RevocationService {
 								ocspRevocationService.certificationAuthority.getCertificate().getEncoded()) };
 			}
 
-			ContentSigner contentSigner = new JcaContentSignerBuilder("SHA1withRSA")
-					.build(ocspRevocationService.ocspResponderPrivateKey);
-			BasicOCSPResp basicOCSPResp = basicOCSPRespBuilder.build(contentSigner, chain, now.toDate());
+			ContentSigner contentSigner = new JcaContentSignerBuilder(
+					ocspRevocationService.certificationAuthority.getSignatureAlgorithm())
+							.build(ocspRevocationService.ocspResponderPrivateKey);
+			BasicOCSPResp basicOCSPResp = basicOCSPRespBuilder.build(contentSigner, chain,
+					Date.from(now.atZone(ZoneId.systemDefault()).toInstant()));
 
 			// response generation
 			OCSPRespBuilder ocspRespBuilder = new OCSPRespBuilder();
@@ -252,8 +274,8 @@ public class OCSPRevocationService implements RevocationService {
 		return true;
 	}
 
-	private Date getRevocationDate(CertificateID certificateID) {
-		for (Map.Entry<X509Certificate, Date> revokedCertificateEntry : this.certificationAuthority
+	private LocalDateTime getRevocationDate(CertificateID certificateID) {
+		for (Map.Entry<X509Certificate, LocalDateTime> revokedCertificateEntry : this.certificationAuthority
 				.getRevokedCertificates().entrySet()) {
 			X509Certificate revokedCertificate = revokedCertificateEntry.getKey();
 			if (revokedCertificate.getSerialNumber().equals(certificateID.getSerialNumber())) {
@@ -261,5 +283,10 @@ public class OCSPRevocationService implements RevocationService {
 			}
 		}
 		return null;
+	}
+
+	@Override
+	public void setFailureBehavior(FailBehavior failBehavior) {
+		this.failBehavior = failBehavior;
 	}
 }

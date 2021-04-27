@@ -1,6 +1,6 @@
 /*
  * Java Trust Project.
- * Copyright (C) 2018 e-Contract.be BVBA.
+ * Copyright (C) 2018-2021 e-Contract.be BV.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -23,6 +23,8 @@ import java.io.OutputStream;
 import java.math.BigInteger;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -35,8 +37,6 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.bouncycastle.asn1.DERIA5String;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
@@ -57,10 +57,12 @@ import org.bouncycastle.crypto.util.PrivateKeyFactory;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.DefaultDigestAlgorithmIdentifierFinder;
 import org.bouncycastle.operator.DefaultSignatureAlgorithmIdentifierFinder;
+import org.bouncycastle.operator.bc.BcECContentSignerBuilder;
 import org.bouncycastle.operator.bc.BcRSAContentSignerBuilder;
-import org.joda.time.DateTime;
-import org.mortbay.jetty.servlet.ServletHolder;
-import org.mortbay.jetty.testing.ServletTester;
+import org.eclipse.jetty.servlet.ServletContextHandler;
+import org.eclipse.jetty.servlet.ServletHolder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * CRL revocation service implementation.
@@ -68,7 +70,7 @@ import org.mortbay.jetty.testing.ServletTester;
  * @author Frank Cornelis
  *
  */
-public class CRLRevocationService implements RevocationService {
+public class CRLRevocationService implements RevocationService, FailableEndpoint {
 
 	private final String identifier;
 
@@ -77,6 +79,8 @@ public class CRLRevocationService implements RevocationService {
 	private String crlUri;
 
 	private CertificationAuthority certificationAuthority;
+
+	private FailBehavior failBehavior;
 
 	private static final Map<String, CRLRevocationService> crlRevocationServices;
 
@@ -105,15 +109,15 @@ public class CRLRevocationService implements RevocationService {
 	}
 
 	@Override
-	public void addEndpoints(ServletTester servletTester) {
+	public void addEndpoints(ServletContextHandler context) {
 		String pathSpec = "/" + this.identifier + "/crl.der";
-		ServletHolder servletHolder = servletTester.addServlet(CRLServlet.class, pathSpec);
+		ServletHolder servletHolder = context.addServlet(CRLServlet.class, pathSpec);
 		servletHolder.setInitParameter("identifier", this.identifier);
 	}
 
 	public static final class CRLServlet extends HttpServlet {
 
-		private static final Log LOG = LogFactory.getLog(CRLServlet.class);
+		private static final Logger LOGGER = LoggerFactory.getLogger(CRLServlet.class);
 
 		private static final long serialVersionUID = 1L;
 
@@ -122,6 +126,9 @@ public class CRLRevocationService implements RevocationService {
 		@Override
 		protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
 			CRLRevocationService crlRevocationService = getCRLRevocationService();
+			if (null != crlRevocationService.failBehavior && crlRevocationService.failBehavior.fail()) {
+				throw new IOException("failing CRL endpoint");
+			}
 			CertificationAuthority certificationAuthority = crlRevocationService.certificationAuthority;
 			try {
 				// make sure we first get the CA certificate, so it gets generated before our
@@ -129,20 +136,22 @@ public class CRLRevocationService implements RevocationService {
 				PrivateKey caPrivateKey = certificationAuthority.getPrivateKey();
 				X509Certificate caCertificate = certificationAuthority.getCertificate();
 				Clock clock = certificationAuthority.getClock();
-				DateTime now = clock.getTime();
+				LocalDateTime now = clock.getTime();
 				// make sure the CRL is younger than the "now" of the world
-				DateTime thisUpdate = now.minusMinutes(1);
-				DateTime nextUpdate = now.plusDays(1);
+				LocalDateTime thisUpdate = now.minusMinutes(1);
+				LocalDateTime nextUpdate = now.plusDays(1);
 
 				X500Name issuerName = new X500Name(caCertificate.getSubjectX500Principal().toString());
-				X509v2CRLBuilder x509v2crlBuilder = new X509v2CRLBuilder(issuerName, thisUpdate.toDate());
-				x509v2crlBuilder.setNextUpdate(nextUpdate.toDate());
+				X509v2CRLBuilder x509v2crlBuilder = new X509v2CRLBuilder(issuerName,
+						Date.from(thisUpdate.atZone(ZoneId.systemDefault()).toInstant()));
+				x509v2crlBuilder.setNextUpdate(Date.from(nextUpdate.atZone(ZoneId.systemDefault()).toInstant()));
 
-				for (Map.Entry<X509Certificate, Date> revokedCertificateEntry : certificationAuthority
+				for (Map.Entry<X509Certificate, LocalDateTime> revokedCertificateEntry : certificationAuthority
 						.getRevokedCertificates().entrySet()) {
 					X509Certificate revokedCertificate = revokedCertificateEntry.getKey();
-					Date revocationDate = revokedCertificateEntry.getValue();
-					x509v2crlBuilder.addCRLEntry(revokedCertificate.getSerialNumber(), revocationDate,
+					LocalDateTime revocationDate = revokedCertificateEntry.getValue();
+					x509v2crlBuilder.addCRLEntry(revokedCertificate.getSerialNumber(),
+							Date.from(revocationDate.atZone(ZoneId.systemDefault()).toInstant()),
 							CRLReason.privilegeWithdrawn);
 				}
 
@@ -153,19 +162,24 @@ public class CRLRevocationService implements RevocationService {
 						new CRLNumber(crlRevocationService.crlNumber));
 				crlRevocationService.crlNumber = crlRevocationService.crlNumber.add(BigInteger.ONE);
 
-				AlgorithmIdentifier sigAlgId = new DefaultSignatureAlgorithmIdentifierFinder().find("SHA1withRSA");
+				AlgorithmIdentifier sigAlgId = new DefaultSignatureAlgorithmIdentifierFinder()
+						.find(certificationAuthority.getSignatureAlgorithm());
 				AlgorithmIdentifier digAlgId = new DefaultDigestAlgorithmIdentifierFinder().find(sigAlgId);
 				AsymmetricKeyParameter asymmetricKeyParameter = PrivateKeyFactory.createKey(caPrivateKey.getEncoded());
 
-				ContentSigner contentSigner = new BcRSAContentSignerBuilder(sigAlgId, digAlgId)
-						.build(asymmetricKeyParameter);
+				ContentSigner contentSigner;
+				if (certificationAuthority.getSignatureAlgorithm().contains("RSA")) {
+					contentSigner = new BcRSAContentSignerBuilder(sigAlgId, digAlgId).build(asymmetricKeyParameter);
+				} else {
+					contentSigner = new BcECContentSignerBuilder(sigAlgId, digAlgId).build(asymmetricKeyParameter);
+				}
 
 				X509CRLHolder x509crlHolder = x509v2crlBuilder.build(contentSigner);
 				byte[] crlValue = x509crlHolder.getEncoded();
 				OutputStream outputStream = resp.getOutputStream();
 				IOUtils.write(crlValue, outputStream);
 			} catch (Exception e) {
-				LOG.error("error: " + e.getMessage(), e);
+				LOGGER.error("error: " + e.getMessage(), e);
 				throw new IOException(e);
 			}
 		}
@@ -188,5 +202,10 @@ public class CRLRevocationService implements RevocationService {
 	@Override
 	public void setCertificationAuthority(CertificationAuthority certificationAuthority) {
 		this.certificationAuthority = certificationAuthority;
+	}
+
+	@Override
+	public void setFailureBehavior(FailBehavior failBehavior) {
+		this.failBehavior = failBehavior;
 	}
 }
