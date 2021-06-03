@@ -98,10 +98,10 @@ public class OnlineCrlRepository implements CrlRepository {
 	public X509CRL findCrl(final URI crlUri, final X509Certificate issuerCertificate, final Date validationDate) throws ServerNotAvailableException {
 		try {
 			return getCrl(crlUri);
-		} catch (final CRLException e) {
+		} catch (final CRLException | NoSuchParserException | StreamParsingException e) {
 			LOGGER.debug("error parsing CRL: {}", e.getMessage(), e);
 			return null;
-		} catch (final Exception e) {
+		} catch (final IOException | CertificateException | NoSuchProviderException e) {
 			LOGGER.error("find CRL error: {}", e.getMessage(), e);
 			return null;
 		}

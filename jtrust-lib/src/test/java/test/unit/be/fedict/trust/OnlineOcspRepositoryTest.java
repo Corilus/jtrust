@@ -22,6 +22,7 @@ package test.unit.be.fedict.trust;
 import static be.fedict.trust.test.World.getFreePort;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.IOException;
@@ -49,6 +50,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import be.fedict.trust.ServerNotAvailableException;
 import be.fedict.trust.ocsp.OnlineOcspRepository;
 import be.fedict.trust.test.PKITestUtils;
 
@@ -109,9 +111,11 @@ public class OnlineOcspRepositoryTest {
 		OcspResponderTestServlet.setResponseStatus(HttpServletResponse.SC_NOT_FOUND);
 
 		// operate
-		final OCSPResp result = this.testedInstance.findOcspResponse(this.ocspUri, this.certificate, this.rootCertificate, new Date());
+		assertThrows(ServerNotAvailableException.class, () -> {
+			final OCSPResp result = this.testedInstance.findOcspResponse(this.ocspUri, this.certificate, this.rootCertificate, new Date());
 
-		fail("Expected ServerNotAvailableException, but got: " + result);
+			fail("Expected ServerNotAvailableException, but got: " + result);
+		});
 	}
 
 	@Test
@@ -120,9 +124,11 @@ public class OnlineOcspRepositoryTest {
 		OcspResponderTestServlet.setResponseStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
 
 		// operate
-		final OCSPResp result = this.testedInstance.findOcspResponse(this.ocspUri, this.certificate, this.rootCertificate, new Date());
+		assertThrows(ServerNotAvailableException.class, () -> {
+			final OCSPResp result = this.testedInstance.findOcspResponse(this.ocspUri, this.certificate, this.rootCertificate, new Date());
 
-		fail("Expected ServerNotAvailableException, but got: " + result);
+			fail("Expected ServerNotAvailableException, but got: " + result);
+		});
 	}
 
 	@Test

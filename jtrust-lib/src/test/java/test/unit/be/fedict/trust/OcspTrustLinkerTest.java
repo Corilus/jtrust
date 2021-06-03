@@ -20,6 +20,7 @@
 package test.unit.be.fedict.trust;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.net.URI;
@@ -540,14 +541,15 @@ public class OcspTrustLinkerTest {
 		EasyMock.replay(mockOcspRepository);
 
 		// operate
-		final TrustLinkerResult result = ocspTrustLinker.hasTrustLink(certificate,
-				rootCertificate, null, new RevocationData(),
-				new DefaultAlgorithmPolicy());
+		assertThrows(TrustLinkerResultException.class, () -> {
+			final TrustLinkerResult result = ocspTrustLinker.hasTrustLink(certificate, rootCertificate, null, new RevocationData(),
+					new DefaultAlgorithmPolicy());
 
-		// verify
-		EasyMock.verify(mockOcspRepository);
+			// verify
+			EasyMock.verify(mockOcspRepository);
 
-		fail("Expected TrustLinkerResultException, but got: " + result);
+			fail("Expected TrustLinkerResultException, but got: " + result);
+		});
 	}
 
 }

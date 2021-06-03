@@ -23,6 +23,7 @@ import static be.fedict.trust.test.World.getFreePort;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.IOException;
@@ -51,6 +52,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import be.fedict.trust.ServerNotAvailableException;
 import be.fedict.trust.crl.OnlineCrlRepository;
 import be.fedict.trust.test.PKITestUtils;
 
@@ -101,9 +103,10 @@ public class OnlineCrlRepositoryTest {
 		CrlRepositoryTestServlet.setResponseStatus(HttpServletResponse.SC_NOT_FOUND);
 
 		// operate
-		final X509CRL result = this.testedInstance.findCrl(this.crlUri, null, this.validationDate);
-
-		fail("Expected ServerNotAvailableException, but got: " + result);
+		assertThrows(ServerNotAvailableException.class, () -> {
+			final X509CRL result = this.testedInstance.findCrl(this.crlUri, null, this.validationDate);
+			fail("Expected ServerNotAvailableException, but got: " + result);
+		});
 	}
 
 	@Test
@@ -112,9 +115,10 @@ public class OnlineCrlRepositoryTest {
 		CrlRepositoryTestServlet.setResponseStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
 
 		// operate
-		final X509CRL result = this.testedInstance.findCrl(this.crlUri, null, this.validationDate);
-
-		fail("Expected ServerNotAvailableException, but got: " + result);
+		assertThrows(ServerNotAvailableException.class, () -> {
+			final X509CRL result = this.testedInstance.findCrl(this.crlUri, null, this.validationDate);
+			fail("Expected ServerNotAvailableException, but got: " + result);
+		});
 	}
 
 	@Test
