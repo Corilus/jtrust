@@ -1,6 +1,7 @@
 # jTrust
 
 [![Build Status](https://travis-ci.com/Corilus/jtrust.svg?branch=master)](https://travis-ci.com/Corilus/jtrust)
+[![Java CI with Maven](https://github.com/Corilus/jtrust/actions/workflows/maven.yml/badge.svg)](https://github.com/Corilus/jtrust/actions/workflows/maven.yml)
 
 ## Introduction
 
