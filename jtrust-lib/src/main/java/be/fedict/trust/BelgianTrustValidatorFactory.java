@@ -14,7 +14,7 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, see 
+ * License along with this software; if not, see
  * http://www.gnu.org/licenses/.
  */
 
@@ -45,7 +45,7 @@ import be.fedict.trust.repository.MemoryCertificateRepository;
 
 /**
  * Trust Validator Factory for Belgian (eID) PKI.
- * 
+ *
  * @author Frank Cornelis
  * @author Dennis Wagelaar
  */
@@ -56,7 +56,7 @@ public class BelgianTrustValidatorFactory {
 	/**
 	 * Creates a trust validator according to Belgian PKI rules for authentication
 	 * certificates.
-	 * 
+	 *
 	 * @return a trust validator instance.
 	 */
 	public static TrustValidator createTrustValidator() {
@@ -66,7 +66,7 @@ public class BelgianTrustValidatorFactory {
 	/**
 	 * Creates a trust validator according to Belgian PKI rules for authentication
 	 * certificates.
-	 * 
+	 *
 	 * @param networkConfig the optional network configuration to be used.
 	 * @return a trust validator instance.
 	 */
@@ -82,12 +82,12 @@ public class BelgianTrustValidatorFactory {
 	/**
 	 * Creates a trust validator according to Belgian PKI rules for authentication
 	 * certificates.
-	 * 
+	 *
 	 * <p>
 	 * Via the external trust linker one can implement a CRL fetcher validation
 	 * architecture based on Java EE.
 	 * </p>
-	 * 
+	 *
 	 * @param networkConfig       the optional network configuration to be used.
 	 * @param externalTrustLinker the optional external trust linker to be used.
 	 * @return a trust validator instance.
@@ -102,7 +102,7 @@ public class BelgianTrustValidatorFactory {
 	/**
 	 * Creates a trust validator according to Belgian PKI rules for non-repudiation
 	 * certificates.
-	 * 
+	 *
 	 * @param networkConfig       the optional network configuration to be used.
 	 * @param externalTrustLinker the optional external trust linker to be used.
 	 * @return a trust validator instance.
@@ -118,7 +118,7 @@ public class BelgianTrustValidatorFactory {
 	/**
 	 * Creates a trust validator according to Belgian PKI rules for non-repudiation
 	 * certificates.
-	 * 
+	 *
 	 * @param networkConfig the optional network configuration to be used.
 	 * @return a trust validator instance.
 	 */
@@ -131,7 +131,7 @@ public class BelgianTrustValidatorFactory {
 	/**
 	 * Creates a trust validator according to Belgian PKI rules for the national
 	 * registry certificate.
-	 * 
+	 *
 	 * @param networkConfig the optional network configuration to be used.
 	 * @return a trust validator instance.
 	 */
@@ -145,7 +145,7 @@ public class BelgianTrustValidatorFactory {
 	/**
 	 * Creates a trust validator according to Belgian PKI rules for TSA
 	 * certificates.
-	 * 
+	 *
 	 * @param networkConfig the optional network configuration to be used.
 	 * @return a trust validator instance.
 	 */
@@ -156,7 +156,7 @@ public class BelgianTrustValidatorFactory {
 	/**
 	 * Creates a trust validator according to Belgian PKI rules for TSA
 	 * certificates.
-	 * 
+	 *
 	 * @param networkConfig       the optional network configuration to be used.
 	 * @param externalTrustLinker the optional external trust linker to be used.
 	 * @return a trust validator instance.
@@ -180,12 +180,12 @@ public class BelgianTrustValidatorFactory {
 	/**
 	 * Creates a trust validator according to Belgian PKI rules for authentication
 	 * certificates.
-	 * 
+	 *
 	 * <p>
 	 * Via the external trust linker one can implement a CRL fetcher validation
 	 * architecture based on Java EE.
 	 * </p>
-	 * 
+	 *
 	 * @param networkConfig         the optional network configuration to be used.
 	 * @param externalTrustLinker   the optional external trust linker to be used.
 	 * @param certificateRepository containing the Belgian eID trust points.
@@ -289,6 +289,10 @@ public class BelgianTrustValidatorFactory {
 			certificatePoliciesCertificateConstraint.addCertificatePolicy("2.16.56.12.1.1.2.2");
 			// RootCA4 foreigner authn
 			certificatePoliciesCertificateConstraint.addCertificatePolicy("2.16.56.12.1.1.7.2");
+			// Belgian eID - Authentication Certificates for Citizens
+			certificatePoliciesCertificateConstraint.addCertificatePolicy("2.16.56.13.6.1.1.1000");
+			// Belgian eID - Authentication Certificates for non-Belgian Residents
+			certificatePoliciesCertificateConstraint.addCertificatePolicy("2.16.56.13.6.2.1.1000");
 			break;
 		case SIGN:
 			// RootCA citizen sign
@@ -307,6 +311,10 @@ public class BelgianTrustValidatorFactory {
 			certificatePoliciesCertificateConstraint.addCertificatePolicy("2.16.56.12.1.1.2.1");
 			// RootCA4 foreigner sign
 			certificatePoliciesCertificateConstraint.addCertificatePolicy("2.16.56.12.1.1.7.1");
+			// Belgian eID - Qualified Signature Certificates for Citizens
+			certificatePoliciesCertificateConstraint.addCertificatePolicy("2.16.56.13.6.1.2.1000");
+			// Belgian eID - Qualified Signature Certificates for non-Belgian Residents
+			certificatePoliciesCertificateConstraint.addCertificatePolicy("2.16.56.13.6.2.2.1000");
 			break;
 		case NATIONAL_REGISTRY:
 			// Root CA
