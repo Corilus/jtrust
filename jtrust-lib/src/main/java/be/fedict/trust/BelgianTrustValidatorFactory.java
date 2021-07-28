@@ -325,6 +325,8 @@ public class BelgianTrustValidatorFactory {
 			certificatePoliciesCertificateConstraint.addCertificatePolicy("2.16.56.10.1.1.4");
 			// Root CA 4
 			certificatePoliciesCertificateConstraint.addCertificatePolicy("2.16.56.12.1.1.4");
+			// Root CA 6
+			certificatePoliciesCertificateConstraint.addCertificatePolicy("2.16.56.13.6.0.1");
 			break;
 		}
 		trustValidator.addCertificateConstraint(certificatePoliciesCertificateConstraint);
