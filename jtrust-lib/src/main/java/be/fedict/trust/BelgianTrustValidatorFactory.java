@@ -76,7 +76,7 @@ public class BelgianTrustValidatorFactory {
 	}
 
 	private enum CertificateType {
-		AUTHN, SIGN, NATIONAL_REGISTRY, NATIONAL_REGISTRY_WITH_TEST
+		AUTHN, SIGN, NATIONAL_REGISTRY
 	};
 
 	/**
@@ -94,7 +94,7 @@ public class BelgianTrustValidatorFactory {
 	 */
 	public static TrustValidator createTrustValidator(NetworkConfig networkConfig, TrustLinker externalTrustLinker) {
 		TrustValidator trustValidator = createTrustValidator(CertificateType.AUTHN, networkConfig, externalTrustLinker,
-				null, null);
+				null, null, false);
 
 		return trustValidator;
 	}
@@ -110,7 +110,7 @@ public class BelgianTrustValidatorFactory {
 	public static TrustValidator createNonRepudiationTrustValidator(NetworkConfig networkConfig,
 			TrustLinker externalTrustLinker) {
 		TrustValidator trustValidator = createTrustValidator(CertificateType.SIGN, networkConfig, externalTrustLinker,
-				null, null);
+				null, null,false);
 
 		return trustValidator;
 	}
@@ -123,7 +123,7 @@ public class BelgianTrustValidatorFactory {
 	 * @return a trust validator instance.
 	 */
 	public static TrustValidator createNonRepudiationTrustValidator(NetworkConfig networkConfig) {
-		TrustValidator trustValidator = createTrustValidator(CertificateType.SIGN, networkConfig, null, null, null);
+		TrustValidator trustValidator = createTrustValidator(CertificateType.SIGN, networkConfig, null, null, null, false);
 
 		return trustValidator;
 	}
@@ -137,14 +137,14 @@ public class BelgianTrustValidatorFactory {
 	 */
 	public static TrustValidator createNationalRegistryTrustValidator(NetworkConfig networkConfig) {
 		TrustValidator trustValidator = createTrustValidator(CertificateType.NATIONAL_REGISTRY, networkConfig, null,
-				null, null);
+				null, null, false);
 
 		return trustValidator;
 	}
 
 	public static TrustValidator createNationalRegistryTrustValidatorWithTestRoot(NetworkConfig networkConfig) {
-		TrustValidator trustValidator = createTrustValidator(CertificateType.NATIONAL_REGISTRY_WITH_TEST, networkConfig, null,
-				null, null);
+		TrustValidator trustValidator = createTrustValidator(CertificateType.NATIONAL_REGISTRY, networkConfig, null,
+				null, null, true);
 
 		return trustValidator;
 	}
@@ -201,7 +201,7 @@ public class BelgianTrustValidatorFactory {
 	public static TrustValidator createTrustValidator(NetworkConfig networkConfig, TrustLinker externalTrustLinker,
 			CertificateRepository certificateRepository) {
 		return createTrustValidator(CertificateType.AUTHN, networkConfig, externalTrustLinker, certificateRepository,
-				null);
+				null, false);
 	}
 
 	public static CertificateRepository createCertificateRepository() {
@@ -246,14 +246,15 @@ public class BelgianTrustValidatorFactory {
 	}
 
 	private static TrustValidator createTrustValidator(CertificateType certificateType, NetworkConfig networkConfig,
-			TrustLinker externalTrustLinker, CertificateRepository certificateRepository, CrlRepository crlRepository) {
+			TrustLinker externalTrustLinker, CertificateRepository certificateRepository, CrlRepository crlRepository,
+			boolean includeTestRoot) {
 
 		TrustValidator trustValidator;
 		if (null == certificateRepository) {
 			// trust points
 			CertificateRepository localCertificateRepository = createCertificateRepository();
 
-			if (certificateType == CertificateType.NATIONAL_REGISTRY_WITH_TEST){
+			if (includeTestRoot){
 				X509Certificate testRootCaCertificate = loadCertificate("be/fedict/trust/belgiumrcatestEC.crt");
 				((MemoryCertificateRepository)localCertificateRepository).addTrustPoint(testRootCaCertificate);
 			}
@@ -277,7 +278,6 @@ public class BelgianTrustValidatorFactory {
 			keyUsageCertificateConstraint.setNonRepudiationFilter(true);
 			break;
 		case NATIONAL_REGISTRY:
-		case NATIONAL_REGISTRY_WITH_TEST:
 			keyUsageCertificateConstraint.setDigitalSignatureFilter(true);
 			keyUsageCertificateConstraint.setNonRepudiationFilter(true);
 			break;
@@ -331,7 +331,6 @@ public class BelgianTrustValidatorFactory {
 			certificatePoliciesCertificateConstraint.addCertificatePolicy("2.16.56.13.6.2.2.1000");
 			break;
 		case NATIONAL_REGISTRY:
-		case NATIONAL_REGISTRY_WITH_TEST:
 			// Root CA
 			certificatePoliciesCertificateConstraint.addCertificatePolicy("2.16.56.1.1.1.4");
 			// Root CA 2
@@ -346,7 +345,7 @@ public class BelgianTrustValidatorFactory {
 		}
 		trustValidator.addCertificateConstraint(certificatePoliciesCertificateConstraint);
 
-		if (CertificateType.NATIONAL_REGISTRY == certificateType) {
+		if (CertificateType.NATIONAL_REGISTRY == certificateType && !includeTestRoot) {
 			DistinguishedNameCertificateConstraint nameConstraint = new DistinguishedNameCertificateConstraint(
 					"CN=RRN, O=RRN, C=BE");
 			trustValidator.addCertificateConstraint(nameConstraint);
