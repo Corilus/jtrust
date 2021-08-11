@@ -76,7 +76,7 @@ public class BelgianTrustValidatorFactory {
 	}
 
 	private enum CertificateType {
-		AUTHN, SIGN, NATIONAL_REGISTRY
+		AUTHN, SIGN, NATIONAL_REGISTRY, NATIONAL_REGISTRY_TEST
 	};
 
 	/**
@@ -136,10 +136,12 @@ public class BelgianTrustValidatorFactory {
 	 * @return a trust validator instance.
 	 */
 	public static TrustValidator createNationalRegistryTrustValidator(NetworkConfig networkConfig) {
-		TrustValidator trustValidator = createTrustValidator(CertificateType.NATIONAL_REGISTRY, networkConfig, null,
-				null, null);
+		return createNationalRegistryTrustValidator(networkConfig, false);
+	}
 
-		return trustValidator;
+	public static TrustValidator createNationalRegistryTrustValidator(NetworkConfig networkConfig, boolean includeTest) {
+		return createTrustValidator(includeTest ? CertificateType.NATIONAL_REGISTRY_TEST : CertificateType.NATIONAL_REGISTRY,
+				networkConfig, null, null, null);
 	}
 
 	/**
@@ -245,6 +247,12 @@ public class BelgianTrustValidatorFactory {
 		if (null == certificateRepository) {
 			// trust points
 			CertificateRepository localCertificateRepository = createCertificateRepository();
+
+			if (certificateType == CertificateType.NATIONAL_REGISTRY_TEST){
+				X509Certificate testRootCaCertificate = loadCertificate("be/fedict/trust/belgiumrcatestEC.crt");
+				((MemoryCertificateRepository)localCertificateRepository).addTrustPoint(testRootCaCertificate);
+			}
+
 			trustValidator = new TrustValidator(localCertificateRepository);
 		} else {
 			trustValidator = new TrustValidator(certificateRepository);
@@ -264,6 +272,7 @@ public class BelgianTrustValidatorFactory {
 			keyUsageCertificateConstraint.setNonRepudiationFilter(true);
 			break;
 		case NATIONAL_REGISTRY:
+		case NATIONAL_REGISTRY_TEST:
 			keyUsageCertificateConstraint.setDigitalSignatureFilter(true);
 			keyUsageCertificateConstraint.setNonRepudiationFilter(true);
 			break;
@@ -317,6 +326,7 @@ public class BelgianTrustValidatorFactory {
 			certificatePoliciesCertificateConstraint.addCertificatePolicy("2.16.56.13.6.2.2.1000");
 			break;
 		case NATIONAL_REGISTRY:
+		case NATIONAL_REGISTRY_TEST:
 			// Root CA
 			certificatePoliciesCertificateConstraint.addCertificatePolicy("2.16.56.1.1.1.4");
 			// Root CA 2
