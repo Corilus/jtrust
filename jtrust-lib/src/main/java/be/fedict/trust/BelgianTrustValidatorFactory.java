@@ -76,7 +76,7 @@ public class BelgianTrustValidatorFactory {
 	}
 
 	private enum CertificateType {
-		AUTHN, SIGN, NATIONAL_REGISTRY
+		AUTHN, SIGN, NATIONAL_REGISTRY, NATIONAL_REGISTRY_WITH_TEST
 	};
 
 	/**
@@ -137,6 +137,13 @@ public class BelgianTrustValidatorFactory {
 	 */
 	public static TrustValidator createNationalRegistryTrustValidator(NetworkConfig networkConfig) {
 		TrustValidator trustValidator = createTrustValidator(CertificateType.NATIONAL_REGISTRY, networkConfig, null,
+				null, null);
+
+		return trustValidator;
+	}
+
+	public static TrustValidator createNationalRegistryTrustValidatorWithTestRoot(NetworkConfig networkConfig) {
+		TrustValidator trustValidator = createTrustValidator(CertificateType.NATIONAL_REGISTRY_WITH_TEST, networkConfig, null,
 				null, null);
 
 		return trustValidator;
@@ -245,6 +252,12 @@ public class BelgianTrustValidatorFactory {
 		if (null == certificateRepository) {
 			// trust points
 			CertificateRepository localCertificateRepository = createCertificateRepository();
+
+			if (certificateType == CertificateType.NATIONAL_REGISTRY_WITH_TEST){
+				X509Certificate testRootCaCertificate = loadCertificate("be/fedict/trust/belgiumrcatestEC.crt");
+				((MemoryCertificateRepository)localCertificateRepository).addTrustPoint(testRootCaCertificate);
+			}
+
 			trustValidator = new TrustValidator(localCertificateRepository);
 		} else {
 			trustValidator = new TrustValidator(certificateRepository);
@@ -264,6 +277,7 @@ public class BelgianTrustValidatorFactory {
 			keyUsageCertificateConstraint.setNonRepudiationFilter(true);
 			break;
 		case NATIONAL_REGISTRY:
+		case NATIONAL_REGISTRY_WITH_TEST:
 			keyUsageCertificateConstraint.setDigitalSignatureFilter(true);
 			keyUsageCertificateConstraint.setNonRepudiationFilter(true);
 			break;
@@ -317,6 +331,7 @@ public class BelgianTrustValidatorFactory {
 			certificatePoliciesCertificateConstraint.addCertificatePolicy("2.16.56.13.6.2.2.1000");
 			break;
 		case NATIONAL_REGISTRY:
+		case NATIONAL_REGISTRY_WITH_TEST:
 			// Root CA
 			certificatePoliciesCertificateConstraint.addCertificatePolicy("2.16.56.1.1.1.4");
 			// Root CA 2
