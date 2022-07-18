@@ -38,6 +38,25 @@ The project can be build via:
 mvn clean install
 ```
 
+## Releasing
+
+```
+mvn versions:set -DnewVersion=2.0.18
+mvn clean verify
+mvn versions:commit
+
+git add .
+git commit -m "Set release version to 2.0.18"
+git push
+git tag -a v2.0.18 -m "jtrust-2.0.18"
+git push --tags
+
+mvn versions:set -DnewVersion=2.0.19-SNAPSHOT
+mvn versions:commit
+git commit -m "Changed working version to 2.0.19-SNAPSHOT"
+git push
+```
+
 
 ## License
 
