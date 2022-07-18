@@ -212,16 +212,11 @@
 		</repository>
 	</repositories>
 	<distributionManagement>
-		<downloadUrl>https://github.com/e-Contract/jtrust/releases</downloadUrl>
 		<repository>
-			<id>e-contract-deploy</id>
-			<url>sftp://192.168.100.1/maven2</url>
-			<uniqueVersion>false</uniqueVersion>
+			<id>github</id>
+			<name>GitHub Corilus Apache Maven Packages</name>
+			<url>https://maven.pkg.github.com/Corilus/jtrust</url>
 		</repository>
-		<site>
-			<id>e-contract-jtrust-site</id>
-			<url>sftp://192.168.100.1/sites/jtrust/</url>
-		</site>
 	</distributionManagement>
 	<issueManagement>
 		<url>https://github.com/e-Contract/jtrust/issues</url>
