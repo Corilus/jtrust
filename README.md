@@ -57,6 +57,7 @@ git commit -m "Changed working version to 2.0.19-SNAPSHOT"
 git push
 ```
 
+Create github release of created tag.
 
 ## License
 
