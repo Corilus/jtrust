@@ -1,7 +1,7 @@
 /*
  * Java Trust Project.
  * Copyright (C) 2009 FedICT.
- * Copyright (C) 2020-2021 e-Contract.be BV.
+ * Copyright (C) 2020-2023 e-Contract.be BV.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -16,22 +16,22 @@
  * License along with this software; if not, see 
  * http://www.gnu.org/licenses/.
  */
-
 package test.unit.be.fedict.trust.constraints;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
 
 import java.security.KeyPair;
 import java.security.cert.X509Certificate;
 import java.time.LocalDateTime;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import be.fedict.trust.constraints.TSACertificateConstraint;
 import be.fedict.trust.linker.TrustLinkerResultException;
 import be.fedict.trust.linker.TrustLinkerResultReason;
+import be.fedict.trust.test.PKIBuilder;
 import be.fedict.trust.test.PKITestUtils;
 
 public class TSACertificateConstraintTest {
@@ -46,7 +46,7 @@ public class TSACertificateConstraintTest {
 	@Test
 	public void testValidTSAConstraint() throws Exception {
 		// setup
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=TestTSA", notBefore,
@@ -59,18 +59,16 @@ public class TSACertificateConstraintTest {
 	@Test
 	public void testInvalidTSAConstraint() throws Exception {
 		// setup
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=TestTSA", notBefore,
 				notAfter, null, keyPair.getPrivate(), true, -1, null, null, null, "SHA1withRSA", false);
 
 		// operate
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			this.testedInstance.check(certificate);
-			fail();
-		} catch (TrustLinkerResultException e) {
-			assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, e.getReason());
-		}
+		});
+		assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, result.getReason());
 	}
 }

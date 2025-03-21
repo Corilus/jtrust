@@ -2,5 +2,4 @@ target/
 .project
 .settings/
 .classpath
-*.iml
-.idea/
+nb-configuration.xml

@@ -1,7 +1,7 @@
 /*
  * Java Trust Project.
  * Copyright (C) 2009 FedICT.
- * Copyright (C) 2014-2021 e-Contract.be BV.
+ * Copyright (C) 2014-2023 e-Contract.be BV.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -16,7 +16,6 @@
  * License along with this software; if not, see 
  * http://www.gnu.org/licenses/.
  */
-
 package be.fedict.trust.test;
 
 import java.io.ByteArrayInputStream;
@@ -97,6 +96,7 @@ import org.bouncycastle.operator.DefaultDigestAlgorithmIdentifierFinder;
 import org.bouncycastle.operator.DefaultSignatureAlgorithmIdentifierFinder;
 import org.bouncycastle.operator.DigestCalculatorProvider;
 import org.bouncycastle.operator.OperatorCreationException;
+import org.bouncycastle.operator.bc.BcECContentSignerBuilder;
 import org.bouncycastle.operator.bc.BcRSAContentSignerBuilder;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder;
@@ -106,8 +106,16 @@ import org.bouncycastle.tsp.TimeStampRequestGenerator;
 import org.bouncycastle.tsp.TimeStampToken;
 import org.bouncycastle.tsp.TimeStampTokenGenerator;
 import org.bouncycastle.util.Store;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+/**
+ *
+ * @deprecated
+ */
 public class PKITestUtils {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(PKITestUtils.class);
 
 	public static X509Certificate generateCertificate(PublicKey subjectPublicKey, String subjectDn,
 			LocalDateTime notBefore, LocalDateTime notAfter, X509Certificate issuerCertificate,
@@ -148,8 +156,14 @@ public class PKITestUtils {
 			PrivateKey issuerPrivateKey, boolean caFlag, int pathLength, String crlUri, String ocspUri)
 			throws IOException, InvalidKeyException, IllegalStateException, NoSuchAlgorithmException,
 			SignatureException, CertificateException, OperatorCreationException {
+		String signatureAlgorithm;
+		if (issuerCertificate.getPublicKey().getAlgorithm().contains("RSA")) {
+			signatureAlgorithm = "SHA256withRSA";
+		} else {
+			signatureAlgorithm = "SHA256withECDSA";
+		}
 		X509Certificate certificate = generateCertificate(subjectPublicKey, subjectDn, notBefore, notAfter,
-				issuerCertificate, issuerPrivateKey, caFlag, pathLength, crlUri, ocspUri, null, "SHA256withRSA");
+				issuerCertificate, issuerPrivateKey, caFlag, pathLength, crlUri, ocspUri, null, signatureAlgorithm);
 		return certificate;
 	}
 
@@ -346,7 +360,13 @@ public class PKITestUtils {
 		AlgorithmIdentifier digAlgId = new DefaultDigestAlgorithmIdentifierFinder().find(sigAlgId);
 		AsymmetricKeyParameter asymmetricKeyParameter = PrivateKeyFactory.createKey(issuerPrivateKey.getEncoded());
 
-		ContentSigner contentSigner = new BcRSAContentSignerBuilder(sigAlgId, digAlgId).build(asymmetricKeyParameter);
+		ContentSigner contentSigner;
+		LOGGER.debug("signature algo: {}", signatureAlgorithm);
+		if (signatureAlgorithm.contains("RSA")) {
+			contentSigner = new BcRSAContentSignerBuilder(sigAlgId, digAlgId).build(asymmetricKeyParameter);
+		} else {
+			contentSigner = new BcECContentSignerBuilder(sigAlgId, digAlgId).build(asymmetricKeyParameter);
+		}
 		X509CertificateHolder x509CertificateHolder = x509v3CertificateBuilder.build(contentSigner);
 
 		byte[] encodedCertificate = x509CertificateHolder.getEncoded();
@@ -394,8 +414,15 @@ public class PKITestUtils {
 			SignatureException, CertificateException, OperatorCreationException {
 		PublicKey subjectPublicKey = keyPair.getPublic();
 		PrivateKey issuerPrivateKey = keyPair.getPrivate();
+		String signatureAlgorithm;
+		if (issuerPrivateKey.getAlgorithm().contains("RSA")) {
+			signatureAlgorithm = "SHA256withRSA";
+		} else {
+			signatureAlgorithm = "SHA256withECDSA";
+		}
+		LOGGER.debug("signature algorithm: {}", signatureAlgorithm);
 		X509Certificate certificate = generateCertificate(subjectPublicKey, subjectDn, notBefore, notAfter, null,
-				issuerPrivateKey, caFlag, pathLength, crlUri, null, keyUsage, "SHA1withRSA");
+				issuerPrivateKey, caFlag, pathLength, crlUri, null, keyUsage, signatureAlgorithm);
 		return certificate;
 	}
 
@@ -440,6 +467,7 @@ public class PKITestUtils {
 	}
 
 	public static class RevokedCertificate {
+
 		private final BigInteger serialNumber;
 		private final LocalDateTime revocationDate;
 

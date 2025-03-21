@@ -1,7 +1,7 @@
 /*
  * Java Trust Project.
  * Copyright (C) 2011 Frank Cornelis.
- * Copyright (C) 2014-2020 e-Contract.be BV.
+ * Copyright (C) 2014-2023 e-Contract.be BV.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -16,7 +16,6 @@
  * License along with this software; if not, see 
  * http://www.gnu.org/licenses/.
  */
-
 package test.integ.be.fedict.trust;
 
 import java.io.FileInputStream;
@@ -42,8 +41,6 @@ import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -53,6 +50,7 @@ import org.slf4j.LoggerFactory;
 import be.fedict.commons.eid.jca.BeIDProvider;
 import be.fedict.trust.TrustValidator;
 import be.fedict.trust.TrustValidatorDecorator;
+import be.fedict.trust.ext.CriticalExtensionTrustLinker;
 import be.fedict.trust.repository.MemoryCertificateRepository;
 
 public class SSLTrustValidatorTest {
@@ -62,12 +60,11 @@ public class SSLTrustValidatorTest {
 	@BeforeAll
 	public static void setUp() throws Exception {
 		Security.addProvider(new BouncyCastleProvider());
+		Security.addProvider(new BeIDProvider());
 	}
 
 	@Test
 	public void testTestEIDBelgiumBe() throws Exception {
-		Security.addProvider(new BeIDProvider());
-
 		SSLContext sslContext = SSLContext.getInstance("TLS");
 		KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance("BeID");
 
@@ -95,23 +92,23 @@ public class SSLTrustValidatorTest {
 
 	private static final class ClientTestX509TrustManager implements X509TrustManager {
 
-		private static final Log LOG = LogFactory.getLog(ClientTestX509TrustManager.class);
+		private static final Logger LOGGER = LoggerFactory.getLogger(ClientTestX509TrustManager.class);
 
 		@Override
 		public void checkClientTrusted(final X509Certificate[] chain, final String authType)
 				throws CertificateException {
-			LOG.debug("checkClientTrusted");
+			LOGGER.debug("checkClientTrusted");
 		}
 
 		@Override
 		public void checkServerTrusted(final X509Certificate[] chain, final String authType)
 				throws CertificateException {
-			LOG.debug("checkServerTrusted: " + authType);
+			LOGGER.debug("checkServerTrusted: {}", authType);
 		}
 
 		@Override
 		public X509Certificate[] getAcceptedIssuers() {
-			LOG.debug("getAcceptedIssuers");
+			LOGGER.debug("getAcceptedIssuers");
 			return null;
 		}
 
@@ -159,6 +156,7 @@ public class SSLTrustValidatorTest {
 		// next is kind of a default trust linked pattern.
 		TrustValidatorDecorator trustValidatorDecorator = new TrustValidatorDecorator();
 		trustValidatorDecorator.addDefaultTrustLinkerConfig(trustValidator);
+		trustValidator.addTrustLinker(new CriticalExtensionTrustLinker());
 
 		// operate
 		trustValidator.isTrusted(certificateChain);

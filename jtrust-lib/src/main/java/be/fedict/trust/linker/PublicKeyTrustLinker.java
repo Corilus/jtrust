@@ -1,7 +1,7 @@
 /*
  * Java Trust Project.
  * Copyright (C) 2009 FedICT.
- * Copyright (C) 2014-2019 e-Contract.be BVBA.
+ * Copyright (C) 2014-2023 e-Contract.be BV.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -31,7 +31,6 @@ import org.bouncycastle.asn1.x509.BasicConstraints;
 import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.asn1.x509.SubjectKeyIdentifier;
 import org.bouncycastle.cert.jcajce.JcaX509ExtensionUtils;
-import org.bouncycastle.x509.extension.X509ExtensionUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,15 +53,14 @@ public class PublicKeyTrustLinker implements TrustLinker {
 		this(false);
 	}
 
-	public PublicKeyTrustLinker(final boolean expiredMode) {
+	public PublicKeyTrustLinker(boolean expiredMode) {
 		this.expiredMode = expiredMode;
 	}
 
 	@Override
-	public TrustLinkerResult hasTrustLink(final X509Certificate childCertificate,
-			final X509Certificate certificate, final Date validationDate,
-			final RevocationData revocationData, final AlgorithmPolicy algorithmPolicy)
-			throws Exception {
+	public TrustLinkerResult hasTrustLink(X509Certificate childCertificate, X509Certificate certificate,
+			Date validationDate, RevocationData revocationData, AlgorithmPolicy algorithmPolicy)
+			throws TrustLinkerResultException, Exception {
 		if (false == childCertificate.getIssuerX500Principal().equals(certificate.getSubjectX500Principal())) {
 			LOGGER.warn("child certificate issuer not the same as the issuer certificate subject");
 			LOGGER.warn("child certificate: {}", childCertificate.getSubjectX500Principal());
@@ -72,8 +70,8 @@ public class PublicKeyTrustLinker implements TrustLinker {
 					"child certificate issuer not the same as the issuer certificate subject");
 		}
 		try {
-			CustomCertSignValidator.verify(childCertificate, certificate);
-		} catch (final Exception e) {
+			childCertificate.verify(certificate.getPublicKey());
+		} catch (Exception e) {
 			LOGGER.debug("verification error: " + e.getMessage(), e);
 			throw new TrustLinkerResultException(TrustLinkerResultReason.INVALID_SIGNATURE,
 					"verification error: " + e.getMessage());
@@ -116,25 +114,25 @@ public class PublicKeyTrustLinker implements TrustLinker {
 			 * violation with 4.2.1.10 Basic Constraints of RFC2459.
 			 */
 			try {
-				CustomCertSignValidator.verify(certificate);
+				certificate.verify(certificate.getPublicKey());
 				LOGGER.warn("allowing self-signed Root CA without CA flag set");
-			} catch (final Exception e) {
+			} catch (Exception e) {
 				throw new TrustLinkerResultException(TrustLinkerResultReason.NO_TRUST, "certificate not a CA");
 			}
 		}
 		if (0 == certificate.getBasicConstraints() && -1 != childCertificate.getBasicConstraints()) {
-			LOGGER.debug("child should not be a CA");
+			LOGGER.warn("child should not be a CA: " + childCertificate.getSubjectX500Principal());
 			throw new TrustLinkerResultException(TrustLinkerResultReason.NO_TRUST, "child should not be a CA");
 		}
 
 		/*
 		 * SKID/AKID sanity check
 		 */
-		final boolean isCa = isCa(certificate);
-		final boolean isChildCa = isCa(childCertificate);
+		boolean isCa = isCa(certificate);
+		boolean isChildCa = isCa(childCertificate);
 
-		final byte[] subjectKeyIdentifierData = certificate.getExtensionValue(Extension.subjectKeyIdentifier.getId());
-		final byte[] authorityKeyIdentifierData = childCertificate
+		byte[] subjectKeyIdentifierData = certificate.getExtensionValue(Extension.subjectKeyIdentifier.getId());
+		byte[] authorityKeyIdentifierData = childCertificate
 				.getExtensionValue(Extension.authorityKeyIdentifier.getId());
 
 		if (isCa && null == subjectKeyIdentifierData) {
@@ -151,9 +149,9 @@ public class PublicKeyTrustLinker implements TrustLinker {
 		}
 
 		if (null != subjectKeyIdentifierData && null != authorityKeyIdentifierData) {
-			final AuthorityKeyIdentifier authorityKeyIdentifier = AuthorityKeyIdentifier
+			AuthorityKeyIdentifier authorityKeyIdentifier = AuthorityKeyIdentifier
 					.getInstance(JcaX509ExtensionUtils.parseExtensionValue(authorityKeyIdentifierData));
-			final SubjectKeyIdentifier subjectKeyIdentifier = SubjectKeyIdentifier
+			SubjectKeyIdentifier subjectKeyIdentifier = SubjectKeyIdentifier
 					.getInstance(JcaX509ExtensionUtils.parseExtensionValue(subjectKeyIdentifierData));
 			if (!Arrays.equals(authorityKeyIdentifier.getKeyIdentifier(), subjectKeyIdentifier.getKeyIdentifier())) {
 				LOGGER.error(
@@ -173,16 +171,16 @@ public class PublicKeyTrustLinker implements TrustLinker {
 		return TrustLinkerResult.UNDECIDED;
 	}
 
-	private boolean isCa(final X509Certificate certificate) {
-		final byte[] basicConstraintsValue = certificate.getExtensionValue(Extension.basicConstraints.getId());
+	private boolean isCa(X509Certificate certificate) {
+		byte[] basicConstraintsValue = certificate.getExtensionValue(Extension.basicConstraints.getId());
 		if (null == basicConstraintsValue) {
 			return false;
 		}
 
 		ASN1Encodable basicConstraintsDecoded;
 		try {
-			basicConstraintsDecoded = X509ExtensionUtil.fromExtensionValue(basicConstraintsValue);
-		} catch (final IOException e) {
+			basicConstraintsDecoded = JcaX509ExtensionUtils.parseExtensionValue(basicConstraintsValue);
+		} catch (IOException e) {
 			LOGGER.error("IO error", e);
 			return false;
 		}
@@ -190,8 +188,8 @@ public class PublicKeyTrustLinker implements TrustLinker {
 			LOGGER.debug("basic constraints extension is not an ASN1 sequence");
 			return false;
 		}
-		final ASN1Sequence basicConstraintsSequence = (ASN1Sequence) basicConstraintsDecoded;
-		final BasicConstraints basicConstraints = BasicConstraints.getInstance(basicConstraintsSequence);
+		ASN1Sequence basicConstraintsSequence = (ASN1Sequence) basicConstraintsDecoded;
+		BasicConstraints basicConstraints = BasicConstraints.getInstance(basicConstraintsSequence);
 		return basicConstraints.isCA();
 	}
 }

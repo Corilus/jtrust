@@ -1,7 +1,7 @@
 /*
  * Java Trust Project.
  * Copyright (C) 2009 FedICT.
- * Copyright (C) 2020-2021 e-Contract.be BV.
+ * Copyright (C) 2020-2023 e-Contract.be BV.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -16,23 +16,23 @@
  * License along with this software; if not, see 
  * http://www.gnu.org/licenses/.
  */
-
 package test.unit.be.fedict.trust.constraints;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
 
 import java.security.KeyPair;
 import java.security.cert.X509Certificate;
 import java.time.LocalDateTime;
 
 import org.bouncycastle.asn1.x509.KeyUsage;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import be.fedict.trust.constraints.KeyUsageCertificateConstraint;
 import be.fedict.trust.linker.TrustLinkerResultException;
 import be.fedict.trust.linker.TrustLinkerResultReason;
+import be.fedict.trust.test.PKIBuilder;
 import be.fedict.trust.test.PKITestUtils;
 
 public class KeyUsageCertificateConstraintTest {
@@ -47,25 +47,23 @@ public class KeyUsageCertificateConstraintTest {
 	@Test
 	public void testNoKeyUsage() throws Exception {
 		// setup
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		X509Certificate certificate = PKITestUtils.generateSelfSignedCertificate(keyPair, "CN=Test", notBefore,
 				notAfter);
 
 		// operate
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			this.testedInstance.check(certificate);
-			fail();
-		} catch (TrustLinkerResultException e) {
-			assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, e.getReason());
-		}
+		});
+		assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, result.getReason());
 	}
 
 	@Test
 	public void testFailingOnFalseNonRepudiationFilter() throws Exception {
 		// setup
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		X509Certificate certificate = PKITestUtils.generateSelfSignedCertificate(keyPair, "CN=Test", notBefore,
@@ -74,18 +72,16 @@ public class KeyUsageCertificateConstraintTest {
 		this.testedInstance.setNonRepudiationFilter(false);
 
 		// operate
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			this.testedInstance.check(certificate);
-			fail();
-		} catch (TrustLinkerResultException e) {
-			assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, e.getReason());
-		}
+		});
+		assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, result.getReason());
 	}
 
 	@Test
 	public void testFailingOnTrueNonRepudiationFilter() throws Exception {
 		// setup
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		X509Certificate certificate = PKITestUtils.generateSelfSignedCertificate(keyPair, "CN=Test", notBefore,
@@ -94,18 +90,16 @@ public class KeyUsageCertificateConstraintTest {
 		this.testedInstance.setNonRepudiationFilter(true);
 
 		// operate
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			this.testedInstance.check(certificate);
-			fail();
-		} catch (TrustLinkerResultException e) {
-			assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, e.getReason());
-		}
+		});
+		assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, result.getReason());
 	}
 
 	@Test
 	public void testDigitalSignatureKeyUsage() throws Exception {
 		// setup
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		KeyUsage keyUsage = new KeyUsage(KeyUsage.digitalSignature);
@@ -121,7 +115,7 @@ public class KeyUsageCertificateConstraintTest {
 	@Test
 	public void testDigitalSignatureNoNonRepudiationKeyUsage() throws Exception {
 		// setup
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		KeyUsage keyUsage = new KeyUsage(KeyUsage.digitalSignature);
@@ -138,7 +132,7 @@ public class KeyUsageCertificateConstraintTest {
 	@Test
 	public void testFailingOnUnexpectedKeyUsageKeyEncipherment() throws Exception {
 		// setup
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		KeyUsage keyUsage = new KeyUsage(KeyUsage.keyEncipherment);
@@ -148,18 +142,16 @@ public class KeyUsageCertificateConstraintTest {
 		this.testedInstance.setKeyEnciphermentFilter(false);
 
 		// operate
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			this.testedInstance.check(certificate);
-			fail();
-		} catch (TrustLinkerResultException e) {
-			assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, e.getReason());
-		}
+		});
+		assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, result.getReason());
 	}
 
 	@Test
 	public void testFailingOnUnexpectedKeyUsageDataEncipherment() throws Exception {
 		// setup
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		KeyUsage keyUsage = new KeyUsage(KeyUsage.dataEncipherment);
@@ -169,18 +161,16 @@ public class KeyUsageCertificateConstraintTest {
 		this.testedInstance.setDataEnciphermentFilter(false);
 
 		// operate
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			this.testedInstance.check(certificate);
-			fail();
-		} catch (TrustLinkerResultException e) {
-			assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, e.getReason());
-		}
+		});
+		assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, result.getReason());
 	}
 
 	@Test
 	public void testFailingOnUnexpectedKeyUsageKeyAgreement() throws Exception {
 		// setup
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		KeyUsage keyUsage = new KeyUsage(KeyUsage.keyAgreement);
@@ -190,18 +180,16 @@ public class KeyUsageCertificateConstraintTest {
 		this.testedInstance.setKeyAgreementFilter(false);
 
 		// operate
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			this.testedInstance.check(certificate);
-			fail();
-		} catch (TrustLinkerResultException e) {
-			assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, e.getReason());
-		}
+		});
+		assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, result.getReason());
 	}
 
 	@Test
 	public void testFailingOnUnexpectedKeyUsageKeyCertSign() throws Exception {
 		// setup
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		KeyUsage keyUsage = new KeyUsage(KeyUsage.keyCertSign);
@@ -211,18 +199,16 @@ public class KeyUsageCertificateConstraintTest {
 		this.testedInstance.setKeyCertificateSigningFilter(false);
 
 		// operate
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			this.testedInstance.check(certificate);
-			fail();
-		} catch (TrustLinkerResultException e) {
-			assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, e.getReason());
-		}
+		});
+		assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, result.getReason());
 	}
 
 	@Test
 	public void testFailingOnUnexpectedKeyUsageCrlSign() throws Exception {
 		// setup
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		KeyUsage keyUsage = new KeyUsage(KeyUsage.cRLSign);
@@ -232,18 +218,16 @@ public class KeyUsageCertificateConstraintTest {
 		this.testedInstance.setCRLSigningFilter(false);
 
 		// operate
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			this.testedInstance.check(certificate);
-			fail();
-		} catch (TrustLinkerResultException e) {
-			assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, e.getReason());
-		}
+		});
+		assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, result.getReason());
 	}
 
 	@Test
 	public void testFailingOnUnexpectedKeyUsageEncypherOnly() throws Exception {
 		// setup
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		KeyUsage keyUsage = new KeyUsage(KeyUsage.encipherOnly);
@@ -253,18 +237,16 @@ public class KeyUsageCertificateConstraintTest {
 		this.testedInstance.setEncipherOnlyFilter(false);
 
 		// operate
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			this.testedInstance.check(certificate);
-			fail();
-		} catch (TrustLinkerResultException e) {
-			assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, e.getReason());
-		}
+		});
+		assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, result.getReason());
 	}
 
 	@Test
 	public void testFailingOnUnexpectedKeyUsageDecypherOnly() throws Exception {
 		// setup
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		KeyUsage keyUsage = new KeyUsage(KeyUsage.decipherOnly);
@@ -274,18 +256,16 @@ public class KeyUsageCertificateConstraintTest {
 		this.testedInstance.setDecipherOnlyFilter(false);
 
 		// operate
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			this.testedInstance.check(certificate);
-			fail();
-		} catch (TrustLinkerResultException e) {
-			assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, e.getReason());
-		}
+		});
+		assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, result.getReason());
 	}
 
 	@Test
 	public void testFailingOnMissingKeyUsage() throws Exception {
 		// setup
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		KeyUsage keyUsage = new KeyUsage(KeyUsage.decipherOnly);
@@ -295,11 +275,9 @@ public class KeyUsageCertificateConstraintTest {
 		this.testedInstance.setCRLSigningFilter(true);
 
 		// operate
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			this.testedInstance.check(certificate);
-			fail();
-		} catch (TrustLinkerResultException e) {
-			assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, e.getReason());
-		}
+		});
+		assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, result.getReason());
 	}
 }

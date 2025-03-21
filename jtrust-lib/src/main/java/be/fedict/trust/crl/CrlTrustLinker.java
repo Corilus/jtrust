@@ -1,7 +1,7 @@
 /*
  * Java Trust Project.
  * Copyright (C) 2009 FedICT.
- * Copyright (C) 2014-2020 e-Contract.be BV.
+ * Copyright (C) 2014-2023 e-Contract.be BV.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -36,7 +36,6 @@ import org.bouncycastle.asn1.ASN1InputStream;
 import org.bouncycastle.asn1.ASN1Integer;
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.ASN1Sequence;
-import org.bouncycastle.asn1.DERIA5String;
 import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.x509.CRLDistPoint;
 import org.bouncycastle.asn1.x509.CRLReason;
@@ -49,7 +48,6 @@ import org.bouncycastle.asn1.x509.IssuingDistributionPoint;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import be.fedict.trust.ServerNotAvailableException;
 import be.fedict.trust.linker.TrustLinker;
 import be.fedict.trust.linker.TrustLinkerResult;
 import be.fedict.trust.linker.TrustLinkerResultException;
@@ -57,6 +55,7 @@ import be.fedict.trust.linker.TrustLinkerResultReason;
 import be.fedict.trust.policy.AlgorithmPolicy;
 import be.fedict.trust.revocation.CRLRevocationData;
 import be.fedict.trust.revocation.RevocationData;
+import org.bouncycastle.asn1.DERIA5String;
 
 /**
  * Trust linker implementation based on CRL revocation information.
@@ -75,35 +74,30 @@ public class CrlTrustLinker implements TrustLinker {
 	 * 
 	 * @param crlRepository the CRL repository used by this CRL trust linker.
 	 */
-	public CrlTrustLinker(final CrlRepository crlRepository) {
+	public CrlTrustLinker(CrlRepository crlRepository) {
 		this.crlRepository = crlRepository;
 	}
 
 	@Override
-	public TrustLinkerResult hasTrustLink(final X509Certificate childCertificate, final X509Certificate certificate,
-			final Date validationDate, final RevocationData revocationData, final AlgorithmPolicy algorithmPolicy)
+	public TrustLinkerResult hasTrustLink(X509Certificate childCertificate, X509Certificate certificate,
+			Date validationDate, RevocationData revocationData, AlgorithmPolicy algorithmPolicy)
 			throws TrustLinkerResultException, Exception {
 
-		final URI crlUri = getCrlUri(childCertificate);
+		URI crlUri = getCrlUri(childCertificate);
 		if (null == crlUri) {
 			LOGGER.debug("no CRL uri in certificate: {}", childCertificate.getSubjectX500Principal());
 			return TrustLinkerResult.UNDECIDED;
 		}
 
-		X509CRL x509crl = null;
-		try {
-			LOGGER.debug("CRL URI: " + crlUri);
-			x509crl = this.crlRepository.findCrl(crlUri, certificate, validationDate);
-		} catch (final ServerNotAvailableException e) {
-			throw new TrustLinkerResultException(TrustLinkerResultReason.CRL_UNAVAILABLE, "CRL server is unavailable!", e);
-		}
+		LOGGER.debug("CRL URI: {}", crlUri);
+		X509CRL x509crl = this.crlRepository.findCrl(crlUri, certificate, validationDate);
 		if (null == x509crl) {
 			LOGGER.debug("CRL not found");
 			return TrustLinkerResult.UNDECIDED;
 		}
 
 		// check CRL integrity
-		final boolean crlIntegrityResult = checkCrlIntegrity(x509crl, certificate, validationDate);
+		boolean crlIntegrityResult = checkCrlIntegrity(x509crl, certificate, validationDate);
 		if (false == crlIntegrityResult) {
 			LOGGER.debug("CRL integrity check failed");
 			return TrustLinkerResult.UNDECIDED;
@@ -123,43 +117,47 @@ public class CrlTrustLinker implements TrustLinker {
 		// fill up revocation data if not null with this valid CRL
 		if (null != revocationData) {
 			try {
-				final CRLRevocationData crlRevocationData = new CRLRevocationData(x509crl.getEncoded(), crlUri.toString());
+				CRLRevocationData crlRevocationData = new CRLRevocationData(x509crl.getEncoded(), crlUri.toString());
 				revocationData.getCrlRevocationData().add(crlRevocationData);
-			} catch (final CRLException e) {
+			} catch (CRLException e) {
 				LOGGER.error("CRLException: " + e.getMessage(), e);
 				throw new TrustLinkerResultException(TrustLinkerResultReason.UNSPECIFIED,
 						"CRLException : " + e.getMessage(), e);
 			}
 		}
 
-		final X509CRLEntry crlEntry = x509crl.getRevokedCertificate(childCertificate.getSerialNumber());
+		X509CRLEntry crlEntry = x509crl.getRevokedCertificate(childCertificate.getSerialNumber());
 		if (null == crlEntry) {
 			LOGGER.debug("CRL OK for: {}", childCertificate.getSubjectX500Principal());
 			return TrustLinkerResult.TRUSTED;
 		} else if (crlEntry.getRevocationDate().after(validationDate)) {
 			LOGGER.debug("CRL OK for: {} at {}", childCertificate.getSubjectX500Principal(), validationDate);
+			LOGGER.debug("CRL entry revocation date: {}", crlEntry.getRevocationDate());
 			return TrustLinkerResult.TRUSTED;
 		}
 
 		LOGGER.debug("certificate revoked/suspended at: {}", crlEntry.getRevocationDate());
 		if (crlEntry.hasExtensions()) {
-			LOGGER.debug("critical extensions: " + crlEntry.getCriticalExtensionOIDs());
-			LOGGER.debug("non-critical extensions: " + crlEntry.getNonCriticalExtensionOIDs());
-			final byte[] reasonCodeExtension = crlEntry.getExtensionValue(Extension.reasonCode.getId());
+			LOGGER.debug("critical extensions: {}", crlEntry.getCriticalExtensionOIDs());
+			LOGGER.debug("non-critical extensions: {}", crlEntry.getNonCriticalExtensionOIDs());
+			byte[] reasonCodeExtension = crlEntry.getExtensionValue(Extension.reasonCode.getId());
 			if (null != reasonCodeExtension) {
-				try (final ASN1InputStream reasonCodeStream = new ASN1InputStream(new ByteArrayInputStream(reasonCodeExtension))) {
-					final DEROctetString octetString = (DEROctetString) (reasonCodeStream.readObject());
-					try (final ASN1InputStream octetStream = new ASN1InputStream(octetString.getOctets())) {
-						final CRLReason crlReason = CRLReason.getInstance(ASN1Enumerated.getInstance(octetStream.readObject()));
-						final BigInteger crlReasonValue = crlReason != null ? crlReason.getValue() : null;
-						LOGGER.debug("CRL reason value: " + crlReasonValue);
-						if (crlReasonValue != null && crlReasonValue.intValue() == CRLReason.certificateHold) {
-							throw new TrustLinkerResultException(TrustLinkerResultReason.INVALID_REVOCATION_STATUS,
-									"certificate suspended by CRL=" + crlEntry.getSerialNumber());
-						}
+				try {
+					DEROctetString octetString = (DEROctetString) (new ASN1InputStream(
+							new ByteArrayInputStream(reasonCodeExtension)).readObject());
+					byte[] octets = octetString.getOctets();
+					CRLReason crlReason = CRLReason
+							.getInstance(ASN1Enumerated.getInstance(new ASN1InputStream(octets).readObject()));
+					BigInteger crlReasonValue = crlReason.getValue();
+					LOGGER.debug("CRL reason value: {}", crlReasonValue);
+					switch (crlReasonValue.intValue()) {
+					case CRLReason.certificateHold:
+						throw new TrustLinkerResultException(TrustLinkerResultReason.INVALID_REVOCATION_STATUS,
+								"certificate suspended by CRL=" + crlEntry.getSerialNumber());
 					}
-				} catch (final IOException e) {
-					throw new TrustLinkerResultException(TrustLinkerResultReason.UNSPECIFIED, "IO error: " + e.getMessage(), e);
+				} catch (IOException e) {
+					throw new TrustLinkerResultException(TrustLinkerResultReason.UNSPECIFIED,
+							"IO error: " + e.getMessage(), e);
 				}
 			}
 		}
@@ -177,7 +175,7 @@ public class CrlTrustLinker implements TrustLinker {
 	 * @param validationDate    the validate date.
 	 * @return <code>true</code> if integrity is OK, <code>false</code> otherwise.
 	 */
-	public static boolean checkCrlIntegrity(final X509CRL x509crl, final X509Certificate issuerCertificate, final Date validationDate) {
+	public static boolean checkCrlIntegrity(X509CRL x509crl, X509Certificate issuerCertificate, Date validationDate) {
 		if (null == x509crl) {
 			throw new IllegalArgumentException("CRL is null");
 		}
@@ -197,12 +195,12 @@ public class CrlTrustLinker implements TrustLinker {
 		}
 		try {
 			x509crl.verify(issuerCertificate.getPublicKey());
-		} catch (final Exception e) {
+		} catch (Exception e) {
 			LOGGER.warn("CRL signature verification failed");
 			LOGGER.warn("exception: " + e.getMessage(), e);
 			return false;
 		}
-		final Date thisUpdate = x509crl.getThisUpdate();
+		Date thisUpdate = x509crl.getThisUpdate();
 		LOGGER.debug("validation date: {}", validationDate);
 		LOGGER.debug("CRL this update: {}", thisUpdate);
 		if (thisUpdate.after(validationDate)) {
@@ -242,36 +240,36 @@ public class CrlTrustLinker implements TrustLinker {
 	 * @param certificate the X509 certificate.
 	 * @return the CRL URI, or <code>null</code> if the extension is not present.
 	 */
-	public static URI getCrlUri(final X509Certificate certificate) {
-		final byte[] crlDistributionPointsValue = certificate.getExtensionValue(Extension.cRLDistributionPoints.getId());
+	public static URI getCrlUri(X509Certificate certificate) {
+		byte[] crlDistributionPointsValue = certificate.getExtensionValue(Extension.cRLDistributionPoints.getId());
 		if (null == crlDistributionPointsValue) {
 			return null;
 		}
-		final ASN1Sequence seq;
-		try (final ASN1InputStream crlDistPointsStream = new ASN1InputStream(new ByteArrayInputStream(crlDistributionPointsValue))) {
-			final DEROctetString octetString = (DEROctetString) crlDistPointsStream.readObject();
-			try (final ASN1InputStream octetStream = new ASN1InputStream(octetString.getOctets())) {
-				seq = (ASN1Sequence) octetStream.readObject();
-			}
-		} catch (final IOException e) {
+		ASN1Sequence seq;
+		try {
+			DEROctetString oct;
+			oct = (DEROctetString) (new ASN1InputStream(new ByteArrayInputStream(crlDistributionPointsValue))
+					.readObject());
+			seq = (ASN1Sequence) new ASN1InputStream(oct.getOctets()).readObject();
+		} catch (IOException e) {
 			throw new RuntimeException("IO error: " + e.getMessage(), e);
 		}
-		final CRLDistPoint distPoint = CRLDistPoint.getInstance(seq);
-		final DistributionPoint[] distributionPoints = distPoint.getDistributionPoints();
-		for (final DistributionPoint distributionPoint : distributionPoints) {
-			final DistributionPointName distributionPointName = distributionPoint.getDistributionPoint();
+		CRLDistPoint distPoint = CRLDistPoint.getInstance(seq);
+		DistributionPoint[] distributionPoints = distPoint.getDistributionPoints();
+		for (DistributionPoint distributionPoint : distributionPoints) {
+			DistributionPointName distributionPointName = distributionPoint.getDistributionPoint();
 			if (DistributionPointName.FULL_NAME != distributionPointName.getType()) {
 				continue;
 			}
-			final GeneralNames generalNames = (GeneralNames) distributionPointName.getName();
-			final GeneralName[] names = generalNames.getNames();
-			for (final GeneralName name : names) {
+			GeneralNames generalNames = (GeneralNames) distributionPointName.getName();
+			GeneralName[] names = generalNames.getNames();
+			for (GeneralName name : names) {
 				if (name.getTagNo() != GeneralName.uniformResourceIdentifier) {
 					LOGGER.debug("not a uniform resource identifier");
 					continue;
 				}
-				final DERIA5String derStr = DERIA5String.getInstance(name.getName());
-				final String str = derStr.getString();
+				DERIA5String derStr = DERIA5String.getInstance(name.getName());
+				String str = derStr.getString();
 				if (false == str.startsWith("http")) {
 					/*
 					 * skip ldap:// protocols
@@ -279,40 +277,39 @@ public class CrlTrustLinker implements TrustLinker {
 					LOGGER.debug("not HTTP/HTTPS: {}", str);
 					continue;
 				}
-				final URI uri = toURI(str);
+				URI uri = toURI(str);
+				LOGGER.debug("CRL URI: {}", uri);
 				return uri;
 			}
 		}
 		return null;
 	}
 
-/**
+	/**
 	 * Gives back the CRL number of the given X509 CRL.
 	 * 
 	 * @param crl the X509 CRL.
 	 * @return the CRL number, or <code>null</code> if not specified.
 	 */
-	public static BigInteger getCrlNumber(final X509CRL crl) {
-		final byte[] crlNumberExtensionValue = crl
-				.getExtensionValue(Extension.cRLNumber.getId());
+	public static BigInteger getCrlNumber(X509CRL crl) {
+		byte[] crlNumberExtensionValue = crl.getExtensionValue(Extension.cRLNumber.getId());
 		if (null == crlNumberExtensionValue) {
 			return null;
 		}
-		try (final ASN1InputStream crlNumberStream = new ASN1InputStream(new ByteArrayInputStream(crlNumberExtensionValue))) {
-			final ASN1OctetString octetString = (ASN1OctetString) (crlNumberStream
-					.readObject());
-			try (final ASN1InputStream octetStream = new ASN1InputStream(octetString.getOctets())) {
-				final ASN1Integer integer = (ASN1Integer) octetStream.readObject();
-				final BigInteger crlNumber = integer.getPositiveValue();
-				return crlNumber;
-			}
-		} catch (final IOException e) {
+		try {
+			ASN1OctetString octetString = (ASN1OctetString) (new ASN1InputStream(
+					new ByteArrayInputStream(crlNumberExtensionValue)).readObject());
+			byte[] octets = octetString.getOctets();
+			ASN1Integer integer = (ASN1Integer) new ASN1InputStream(octets).readObject();
+			BigInteger crlNumber = integer.getPositiveValue();
+			return crlNumber;
+		} catch (IOException e) {
 			throw new RuntimeException("IO error: " + e.getMessage(), e);
 		}
 	}
 
-	private boolean isIndirectCRL(final X509CRL crl) {
-		final byte[] idp = crl.getExtensionValue(Extension.issuingDistributionPoint.getId());
+	private boolean isIndirectCRL(X509CRL crl) {
+		byte[] idp = crl.getExtensionValue(Extension.issuingDistributionPoint.getId());
 		boolean isIndirect = false;
 		if (idp != null) {
 			isIndirect = IssuingDistributionPoint.getInstance(idp).isIndirectCRL();
@@ -321,11 +318,11 @@ public class CrlTrustLinker implements TrustLinker {
 		return isIndirect;
 	}
 
-	private static URI toURI(final String str) {
+	private static URI toURI(String str) {
 		try {
-			final URI uri = new URI(str);
+			URI uri = new URI(str);
 			return uri;
-		} catch (final URISyntaxException e) {
+		} catch (URISyntaxException e) {
 			throw new InvalidParameterException("CRL URI syntax error: " + e.getMessage());
 		}
 	}

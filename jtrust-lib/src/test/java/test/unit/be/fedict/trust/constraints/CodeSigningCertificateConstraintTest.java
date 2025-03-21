@@ -1,7 +1,7 @@
 /*
  * Java Trust Project.
  * Copyright (C) 2012 FedICT.
- * Copyright (C) 2019-2021 e-Contract.be BV.
+ * Copyright (C) 2019-2023 e-Contract.be BV.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -16,22 +16,22 @@
  * License along with this software; if not, see
  * http://www.gnu.org/licenses/.
  */
-
 package test.unit.be.fedict.trust.constraints;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
 
 import java.security.KeyPair;
 import java.security.cert.X509Certificate;
 import java.time.LocalDateTime;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import be.fedict.trust.constraints.CodeSigningCertificateConstraint;
 import be.fedict.trust.linker.TrustLinkerResultException;
 import be.fedict.trust.linker.TrustLinkerResultReason;
+import be.fedict.trust.test.PKIBuilder;
 import be.fedict.trust.test.PKITestUtils;
 
 public class CodeSigningCertificateConstraintTest {
@@ -46,7 +46,7 @@ public class CodeSigningCertificateConstraintTest {
 	@Test
 	public void testCodeSigningCertificatePasses() throws Exception {
 		// setup
-		final X509Certificate certificate = PKITestUtils.loadCertificate("/code-signing-fedict.der");
+		X509Certificate certificate = PKITestUtils.loadCertificate("/code-signing-fedict.der");
 
 		// operate
 		this.testedInstance.check(certificate);
@@ -55,17 +55,16 @@ public class CodeSigningCertificateConstraintTest {
 	@Test
 	public void testNonCodeSigningCertificateFails() throws Exception {
 		// setup
-		final KeyPair keyPair = PKITestUtils.generateKeyPair();
-		final LocalDateTime notBefore = LocalDateTime.now();
-		final LocalDateTime notAfter = notBefore.plusMonths(1);
-		final X509Certificate certificate = PKITestUtils.generateSelfSignedCertificate(keyPair, "CN=Test", notBefore, notAfter);
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
+		LocalDateTime notBefore = LocalDateTime.now();
+		LocalDateTime notAfter = notBefore.plusMonths(1);
+		X509Certificate certificate = PKITestUtils.generateSelfSignedCertificate(keyPair, "CN=Test", notBefore,
+				notAfter);
 
 		// operate & verify
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			this.testedInstance.check(certificate);
-			fail();
-		} catch (final TrustLinkerResultException e) {
-			assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, e.getReason());
-		}
+		});
+		assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, result.getReason());
 	}
 }

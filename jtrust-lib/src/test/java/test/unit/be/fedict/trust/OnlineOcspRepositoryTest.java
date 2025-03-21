@@ -1,7 +1,7 @@
 /*
  * Java Trust Project.
  * Copyright (C) 2009 FedICT.
- * Copyright (C) 2021 e-Contract.be BV.
+ * Copyright (C) 2021-2023 e-Contract.be BV.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -16,14 +16,10 @@
  * License along with this software; if not, see 
  * http://www.gnu.org/licenses/.
  */
-
 package test.unit.be.fedict.trust;
 
-import static be.fedict.trust.test.World.getFreePort;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -31,7 +27,6 @@ import java.net.URI;
 import java.security.KeyPair;
 import java.security.Security;
 import java.security.cert.X509Certificate;
-import java.time.LocalDateTime;
 import java.util.Date;
 
 import javax.servlet.ServletException;
@@ -40,21 +35,25 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.bouncycastle.cert.ocsp.OCSPResp;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import be.fedict.trust.ServerNotAvailableException;
 import be.fedict.trust.ocsp.OnlineOcspRepository;
-import be.fedict.trust.test.PKITestUtils;
+import be.fedict.trust.test.PKIBuilder;
 
 public class OnlineOcspRepositoryTest {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(OnlineOcspRepositoryTest.class);
 
 	private Server server;
 
@@ -68,36 +67,37 @@ public class OnlineOcspRepositoryTest {
 
 	private KeyPair rootKeyPair;
 
+	@BeforeAll
+	public static void installSecurityProviders() throws Exception {
+		Security.addProvider(new BouncyCastleProvider());
+	}
+
 	@BeforeEach
 	public void setUp() throws Exception {
-		final int freePort = getFreePort();
-		this.server = new Server(freePort);
-		final ServletContextHandler servletContextHandler = new ServletContextHandler();
+		this.server = new Server(0);
+		ServletContextHandler servletContextHandler = new ServletContextHandler();
 		servletContextHandler.setContextPath("/pki");
 		this.server.setHandler(servletContextHandler);
-		final String pathSpec = "/test.ocsp";
+		String pathSpec = "/test.ocsp";
 		servletContextHandler.addServlet(OcspResponderTestServlet.class, pathSpec);
 		this.server.start();
 
-		final String servletUrl = "http://localhost:" + freePort + "/pki";
+		ServerConnector serverConnector = (ServerConnector) this.server.getConnectors()[0];
+		int port = serverConnector.getLocalPort();
+		String servletUrl = "http://localhost:" + port + "/pki";
 		this.ocspUri = new URI(servletUrl + pathSpec);
 
 		this.testedInstance = new OnlineOcspRepository();
 
 		OcspResponderTestServlet.reset();
 
-		this.rootKeyPair = PKITestUtils.generateKeyPair();
-		final LocalDateTime notBefore = LocalDateTime.now();
-		final LocalDateTime notAfter = notBefore.plusMonths(1);
-		this.rootCertificate = PKITestUtils.generateSelfSignedCertificate(this.rootKeyPair, "CN=TestRoot", notBefore,
-				notAfter);
+		this.rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
+		this.rootCertificate = new PKIBuilder.CertificateBuilder(this.rootKeyPair).withSubjectName("CN=TestRoot")
+				.withValidityMonths(1).build();
 
-		final KeyPair keyPair = PKITestUtils.generateKeyPair();
-		this.certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=Test", notBefore, notAfter,
-				this.rootCertificate, this.rootKeyPair.getPrivate());
-
-		// required for org.bouncycastle.ocsp.CertificateID
-		Security.addProvider(new BouncyCastleProvider());
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
+		this.certificate = new PKIBuilder.CertificateBuilder(keyPair.getPublic(), this.rootKeyPair.getPrivate(),
+				this.rootCertificate).withSubjectName("CN=Test").withValidityMonths(1).build();
 	}
 
 	@AfterEach
@@ -111,24 +111,11 @@ public class OnlineOcspRepositoryTest {
 		OcspResponderTestServlet.setResponseStatus(HttpServletResponse.SC_NOT_FOUND);
 
 		// operate
-		assertThrows(ServerNotAvailableException.class, () -> {
-			final OCSPResp result = this.testedInstance.findOcspResponse(this.ocspUri, this.certificate, this.rootCertificate, new Date());
+		OCSPResp ocspResp = this.testedInstance.findOcspResponse(this.ocspUri, this.certificate, this.rootCertificate,
+				new Date());
 
-			fail("Expected ServerNotAvailableException, but got: " + result);
-		});
-	}
-
-	@Test
-	public void testOcspServerNotResponding() throws Exception {
-		// setup
-		OcspResponderTestServlet.setResponseStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-
-		// operate
-		assertThrows(ServerNotAvailableException.class, () -> {
-			final OCSPResp result = this.testedInstance.findOcspResponse(this.ocspUri, this.certificate, this.rootCertificate, new Date());
-
-			fail("Expected ServerNotAvailableException, but got: " + result);
-		});
+		// verify
+		assertNull(ocspResp);
 	}
 
 	@Test
@@ -137,7 +124,7 @@ public class OnlineOcspRepositoryTest {
 		OcspResponderTestServlet.setResponseStatus(HttpServletResponse.SC_OK);
 
 		// operate
-		final OCSPResp ocspResp = this.testedInstance.findOcspResponse(this.ocspUri, this.certificate, this.rootCertificate,
+		OCSPResp ocspResp = this.testedInstance.findOcspResponse(this.ocspUri, this.certificate, this.rootCertificate,
 				new Date());
 
 		// verify
@@ -151,7 +138,7 @@ public class OnlineOcspRepositoryTest {
 		OcspResponderTestServlet.setContentType("foobar");
 
 		// operate
-		final OCSPResp ocspResp = this.testedInstance.findOcspResponse(this.ocspUri, this.certificate, this.rootCertificate,
+		OCSPResp ocspResp = this.testedInstance.findOcspResponse(this.ocspUri, this.certificate, this.rootCertificate,
 				new Date());
 
 		// verify
@@ -165,7 +152,7 @@ public class OnlineOcspRepositoryTest {
 		OcspResponderTestServlet.setContentType("application/ocsp-response");
 
 		// operate
-		final OCSPResp ocspResp = this.testedInstance.findOcspResponse(this.ocspUri, this.certificate, this.rootCertificate,
+		OCSPResp ocspResp = this.testedInstance.findOcspResponse(this.ocspUri, this.certificate, this.rootCertificate,
 				new Date());
 
 		// verify
@@ -180,12 +167,10 @@ public class OnlineOcspRepositoryTest {
 		OcspResponderTestServlet.setOcspData("foobar".getBytes());
 
 		// operate & verify
-		try {
+		RuntimeException result = Assertions.assertThrows(RuntimeException.class, () -> {
 			this.testedInstance.findOcspResponse(this.ocspUri, this.certificate, this.rootCertificate, new Date());
-			fail();
-		} catch (final Exception e) {
-			// expected
-		}
+		});
+		LOGGER.debug("message: {}", result.getMessage());
 	}
 
 	@Test
@@ -194,13 +179,13 @@ public class OnlineOcspRepositoryTest {
 		OcspResponderTestServlet.setResponseStatus(HttpServletResponse.SC_OK);
 		OcspResponderTestServlet.setContentType("application/ocsp-response");
 
-		final OCSPResp ocspResp = PKITestUtils.createOcspResp(this.certificate, false, this.rootCertificate,
-				this.rootCertificate, this.rootKeyPair.getPrivate());
+		OCSPResp ocspResp = new PKIBuilder.OCSPBuilder(this.rootKeyPair.getPrivate(), this.rootCertificate,
+				this.certificate, this.rootCertificate).build();
 
 		OcspResponderTestServlet.setOcspData(ocspResp.getEncoded());
 
 		// operate
-		final OCSPResp resultOcspResp = this.testedInstance.findOcspResponse(this.ocspUri, this.certificate,
+		OCSPResp resultOcspResp = this.testedInstance.findOcspResponse(this.ocspUri, this.certificate,
 				this.rootCertificate, new Date());
 
 		// verify
@@ -209,7 +194,7 @@ public class OnlineOcspRepositoryTest {
 
 	public static class OcspResponderTestServlet extends HttpServlet {
 
-		private static final Log LOG = LogFactory.getLog(OcspResponderTestServlet.class);
+		private static final Logger LOGGER = LoggerFactory.getLogger(OcspResponderTestServlet.class);
 
 		private static final long serialVersionUID = 1L;
 
@@ -219,15 +204,15 @@ public class OnlineOcspRepositoryTest {
 
 		private static byte[] ocspData;
 
-		public static void setResponseStatus(final int responseStatus) {
+		public static void setResponseStatus(int responseStatus) {
 			OcspResponderTestServlet.responseStatus = responseStatus;
 		}
 
-		public static void setContentType(final String contentType) {
+		public static void setContentType(String contentType) {
 			OcspResponderTestServlet.contentType = contentType;
 		}
 
-		public static void setOcspData(final byte[] ocspData) {
+		public static void setOcspData(byte[] ocspData) {
 			OcspResponderTestServlet.ocspData = ocspData;
 		}
 
@@ -238,14 +223,14 @@ public class OnlineOcspRepositoryTest {
 		}
 
 		@Override
-		protected void doPost(final HttpServletRequest request, final HttpServletResponse response)
+		protected void doPost(HttpServletRequest request, HttpServletResponse response)
 				throws ServletException, IOException {
-			LOG.debug("doPost");
+			LOGGER.debug("doPost");
 			if (null != OcspResponderTestServlet.contentType) {
 				response.addHeader("Content-Type", OcspResponderTestServlet.contentType);
 			}
 			if (null != OcspResponderTestServlet.ocspData) {
-				final OutputStream outputStream = response.getOutputStream();
+				OutputStream outputStream = response.getOutputStream();
 				IOUtils.write(OcspResponderTestServlet.ocspData, outputStream);
 			}
 			if (0 != OcspResponderTestServlet.responseStatus) {

@@ -17,11 +17,7 @@
  * http://www.gnu.org/licenses/.
  */
 
-package test.unit.be.fedict.trust;
-
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
+package test.integ.be.fedict.trust;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -53,6 +49,8 @@ import be.fedict.trust.crl.OnlineCrlRepository;
 import be.fedict.trust.test.PKIBuilder;
 
 public class OnlineCrlRepositoryTest {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(OnlineCrlRepositoryTest.class);
 
 	private Server server;
 
@@ -94,43 +92,7 @@ public class OnlineCrlRepositoryTest {
 	}
 
 	@Test
-	public void testCrlNotFound() throws Exception {
-		// setup
-		CrlRepositoryTestServlet.setResponseStatus(HttpServletResponse.SC_NOT_FOUND);
-
-		// operate
-		X509CRL crl = this.testedInstance.findCrl(this.crlUri, null, this.validationDate);
-
-		// verify
-		assertNull(crl);
-	}
-
-	@Test
-	public void testInvalidCrl() throws Exception {
-		// setup
-		CrlRepositoryTestServlet.setCrlData("foobar".getBytes());
-
-		// operate
-		X509CRL crl = this.testedInstance.findCrl(this.crlUri, null, this.validationDate);
-
-		// verify
-		assertNull(crl);
-	}
-
-	@Test
-	public void testEmptyCrl() throws Exception {
-		// setup
-		CrlRepositoryTestServlet.setCrlData(new byte[0]);
-
-		// operate
-		X509CRL crl = this.testedInstance.findCrl(this.crlUri, null, this.validationDate);
-
-		// verify
-		assertNull(crl);
-	}
-
-	@Test
-	public void testDownloadCrl() throws Exception {
+	public void testDownloadCrlPerformance() throws Exception {
 		// setup
 		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		X509Certificate certificate = new PKIBuilder.CertificateBuilder(keyPair).withSubjectName("CN=Test")
@@ -140,11 +102,20 @@ public class OnlineCrlRepositoryTest {
 		CrlRepositoryTestServlet.setCrlData(crl.getEncoded());
 
 		// operate
-		X509CRL result = this.testedInstance.findCrl(this.crlUri, certificate, this.validationDate);
-
-		// verify
-		assertNotNull(result);
-		assertArrayEquals(crl.getEncoded(), result.getEncoded());
+		long t0 = System.currentTimeMillis();
+		final int COUNT = 50 * 1000;
+		for (int idx = 0; idx < COUNT; idx++) {
+			try {
+				this.testedInstance.findCrl(this.crlUri, certificate, this.validationDate);
+			} catch (Exception ex) {
+				LOGGER.error("CRL download error: " + ex.getMessage(), ex);
+				LOGGER.debug("counter: {}", idx);
+				break;
+			}
+		}
+		long t1 = System.currentTimeMillis();
+		double dt = ((double) t1 - t0) / COUNT;
+		LOGGER.debug("dt: {} ms", dt);
 	}
 
 	public static class CrlRepositoryTestServlet extends HttpServlet {

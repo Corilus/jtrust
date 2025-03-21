@@ -1,7 +1,7 @@
 /*
  * Java Trust Project.
  * Copyright (C) 2009 FedICT.
- * Copyright (C) 2014-2021 e-Contract.be BV.
+ * Copyright (C) 2014-2023 e-Contract.be BV.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -16,11 +16,9 @@
  * License along with this software; if not, see 
  * http://www.gnu.org/licenses/.
  */
-
 package be.fedict.trust.crl;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.security.NoSuchProviderException;
@@ -30,16 +28,19 @@ import java.security.cert.CertificateFactory;
 import java.security.cert.X509CRL;
 import java.security.cert.X509Certificate;
 import java.util.Date;
+import java.util.concurrent.TimeUnit;
 
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpHost;
-import org.apache.http.HttpResponse;
-import org.apache.http.StatusLine;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.config.RequestConfig;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.protocol.HttpClientContext;
-import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.hc.client5.http.classic.methods.HttpGet;
+import org.apache.hc.client5.http.config.ConnectionConfig;
+import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
+import org.apache.hc.client5.http.impl.io.BasicHttpClientConnectionManager;
+import org.apache.hc.client5.http.protocol.HttpClientContext;
+import org.apache.hc.core5.http.ClassicHttpResponse;
+import org.apache.hc.core5.http.HttpEntity;
+import org.apache.hc.core5.http.HttpHost;
+import org.apache.hc.core5.http.io.HttpClientResponseHandler;
 import org.bouncycastle.x509.NoSuchParserException;
 import org.bouncycastle.x509.util.StreamParsingException;
 import org.slf4j.Logger;
@@ -47,22 +48,16 @@ import org.slf4j.LoggerFactory;
 
 import be.fedict.trust.Credentials;
 import be.fedict.trust.NetworkConfig;
-import be.fedict.trust.ServerNotAvailableException;
-import be.fedict.trust.ServerType;
 
 /**
  * Online CRL repository. This CRL repository implementation will download the
  * CRLs from the given CRL URIs.
- * 
+ *
  * @author Frank Cornelis
  */
 public class OnlineCrlRepository implements CrlRepository {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(OnlineCrlRepository.class);
-
-	private final static int CONNECTION_TIMEOUT_DURATION = 1000;
-
-	private final static int SOCKET_TIMEOUT_DURATION = 2000;
 
 	private final NetworkConfig networkConfig;
 
@@ -70,11 +65,11 @@ public class OnlineCrlRepository implements CrlRepository {
 
 	/**
 	 * Main construtor.
-	 * 
+	 *
 	 * @param networkConfig the optional network configuration used for downloading
 	 *                      CRLs.
 	 */
-	public OnlineCrlRepository(final NetworkConfig networkConfig) {
+	public OnlineCrlRepository(NetworkConfig networkConfig) {
 		this.networkConfig = networkConfig;
 	}
 
@@ -87,78 +82,89 @@ public class OnlineCrlRepository implements CrlRepository {
 
 	/**
 	 * Sets the credentials to use to access protected CRL services.
-	 * 
+	 *
 	 * @param credentials
 	 */
-	public void setCredentials(final Credentials credentials) {
+	public void setCredentials(Credentials credentials) {
 		this.credentials = credentials;
 	}
 
 	@Override
-	public X509CRL findCrl(final URI crlUri, final X509Certificate issuerCertificate, final Date validationDate) throws ServerNotAvailableException {
+	public X509CRL findCrl(URI crlUri, X509Certificate issuerCertificate, Date validationDate) {
 		try {
 			return getCrl(crlUri);
-		} catch (final CRLException | NoSuchParserException | StreamParsingException e) {
+		} catch (CRLException e) {
 			LOGGER.debug("error parsing CRL: {}", e.getMessage(), e);
 			return null;
-		} catch (final IOException | CertificateException | NoSuchProviderException e) {
+		} catch (Exception e) {
 			LOGGER.error("find CRL error: {}", e.getMessage(), e);
 			return null;
 		}
 	}
 
-	private X509CRL getCrl(final URI crlUri) throws IOException, CertificateException, CRLException, NoSuchProviderException,
-			NoSuchParserException, StreamParsingException, ServerNotAvailableException {
-		final RequestConfig.Builder requestConfigBuilder = RequestConfig.custom().setConnectTimeout(CONNECTION_TIMEOUT_DURATION)
-				.setConnectionRequestTimeout(CONNECTION_TIMEOUT_DURATION).setSocketTimeout(SOCKET_TIMEOUT_DURATION);
-
-		if (null != this.networkConfig) {
-			final HttpHost proxy = new HttpHost(this.networkConfig.getProxyHost(), this.networkConfig.getProxyPort());
-			requestConfigBuilder.setProxy(proxy);
-		}
-		final HttpClientContext httpClientContext = HttpClientContext.create();
+	private X509CRL getCrl(URI crlUri) throws IOException, CertificateException, CRLException, NoSuchProviderException,
+			NoSuchParserException, StreamParsingException {
+		int timeout = 10;
+		HttpClientContext httpClientContext = HttpClientContext.create();
 		if (null != this.credentials) {
 			this.credentials.init(httpClientContext);
 		}
-		final RequestConfig requestConfig = requestConfigBuilder.build();
-		final HttpClientBuilder httpClientBuilder = HttpClientBuilder.create();
+		RequestConfig.Builder requestConfigBuilder = RequestConfig.custom().setConnectionRequestTimeout(timeout,
+				TimeUnit.SECONDS);
+		RequestConfig requestConfig = requestConfigBuilder.build();
+		HttpClientBuilder httpClientBuilder = HttpClientBuilder.create();
 		httpClientBuilder.setDefaultRequestConfig(requestConfig);
-		final HttpClient httpClient = httpClientBuilder.build();
-
-		final String downloadUrl = crlUri.toURL().toString();
-		LOGGER.debug("downloading CRL from: {}", downloadUrl);
-		final HttpGet httpGet = new HttpGet(downloadUrl);
-		httpGet.addHeader("User-Agent", "jTrust CRL Client");
-
-		final HttpResponse httpResponse;
-		final int statusCode;
-		try {
-			httpResponse = httpClient.execute(httpGet);
-			final StatusLine statusLine = httpResponse.getStatusLine();
-			statusCode = statusLine.getStatusCode();
-		} catch (final IOException e) {
-			throw new ServerNotAvailableException("CRL server is down", ServerType.CRL, e);
+		if (null != this.networkConfig) {
+			HttpHost proxy = new HttpHost(this.networkConfig.getProxyHost(), this.networkConfig.getProxyPort());
+			httpClientBuilder.setProxy(proxy);
 		}
+		BasicHttpClientConnectionManager basicHttpClientConnectionManager = new BasicHttpClientConnectionManager();
+		ConnectionConfig connectionConfig = ConnectionConfig.custom().setConnectTimeout(timeout, TimeUnit.SECONDS)
+				.setSocketTimeout(timeout, TimeUnit.SECONDS).build();
+		basicHttpClientConnectionManager.setConnectionConfig(connectionConfig);
+		httpClientBuilder.setConnectionManager(basicHttpClientConnectionManager);
+		try (CloseableHttpClient httpClient = httpClientBuilder.build()) {
+			String downloadUrl = crlUri.toURL().toString();
+			LOGGER.debug("downloading CRL from: {}", downloadUrl);
+			HttpGet httpGet = new HttpGet(downloadUrl);
+			httpGet.addHeader("User-Agent", "jTrust CRL Client");
+			HttpClientResponseHandler<X509CRL> responseHandler = (ClassicHttpResponse httpResponse) -> {
+				int statusCode = httpResponse.getCode();
+				if (HttpURLConnection.HTTP_OK != statusCode) {
+					LOGGER.error("HTTP status code: {}", statusCode);
+					return null;
+				}
 
-		if (HttpURLConnection.HTTP_OK != statusCode) {
-			throw new ServerNotAvailableException("CRL server responded with status code " + statusCode, ServerType.CRL);
-		}
-
-		final CertificateFactory certificateFactory = CertificateFactory.getInstance("X.509", "BC");
-		LOGGER.debug("certificate factory provider: {}", certificateFactory.getProvider().getName());
-		LOGGER.debug("certificate factory class: {}", certificateFactory.getClass().getName());
-		final HttpEntity httpEntity = httpResponse.getEntity();
-		try (final InputStream content = httpEntity.getContent()) {
-			final X509CRL crl = (X509CRL) certificateFactory.generateCRL(content);
-			if (crl != null) {
-				LOGGER.debug("X509CRL class: {}", crl.getClass().getName());
-				LOGGER.debug("CRL size: {} bytes", crl.getEncoded().length);
-			} else {
-				LOGGER.error("null CRL");
-			}
+				// not guaranteed to be thread-safe
+				CertificateFactory certificateFactory;
+				try {
+					certificateFactory = CertificateFactory.getInstance("X.509", "BC");
+				} catch (CertificateException | NoSuchProviderException ex) {
+					LOGGER.error("error: " + ex.getMessage(), ex);
+					return null;
+				}
+				HttpEntity httpEntity = httpResponse.getEntity();
+				X509CRL crl;
+				try {
+					crl = (X509CRL) certificateFactory.generateCRL(httpEntity.getContent());
+				} catch (CRLException ex) {
+					LOGGER.error("error: " + ex.getMessage(), ex);
+					return null;
+				}
+				if (null == crl) {
+					LOGGER.error("null CRL");
+					return null;
+				}
+				try {
+					LOGGER.debug("CRL size: {} bytes", crl.getEncoded().length);
+				} catch (CRLException ex) {
+					LOGGER.error("error: " + ex.getMessage(), ex);
+					return null;
+				}
+				return crl;
+			};
+			X509CRL crl = httpClient.execute(httpGet, httpClientContext, responseHandler);
 			return crl;
-		} finally {
-			httpGet.releaseConnection();
 		}
 	}
 }

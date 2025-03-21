@@ -1,7 +1,7 @@
 /*
  * Java Trust Project.
  * Copyright (C) 2009 FedICT.
- * Copyright (C) 2018-2021 e-Contract.be BV.
+ * Copyright (C) 2018-2023 e-Contract.be BV.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -16,12 +16,10 @@
  * License along with this software; if not, see 
  * http://www.gnu.org/licenses/.
  */
-
 package test.unit.be.fedict.trust;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.fail;
 
 import java.security.KeyPair;
 import java.security.Security;
@@ -31,6 +29,7 @@ import java.time.ZoneId;
 import java.util.Date;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -40,7 +39,7 @@ import be.fedict.trust.linker.TrustLinkerResultException;
 import be.fedict.trust.linker.TrustLinkerResultReason;
 import be.fedict.trust.policy.DefaultAlgorithmPolicy;
 import be.fedict.trust.revocation.RevocationData;
-import be.fedict.trust.test.PKITestUtils;
+import be.fedict.trust.test.PKIBuilder;
 
 public class PublicKeyTrustLinkerTest {
 
@@ -52,15 +51,13 @@ public class PublicKeyTrustLinkerTest {
 	@Test
 	public void testHasTrustLink() throws Exception {
 		// setup
-		KeyPair rootKeyPair = PKITestUtils.generateKeyPair();
-		LocalDateTime notBefore = LocalDateTime.now();
-		LocalDateTime notAfter = notBefore.plusMonths(1);
-		X509Certificate rootCertificate = PKITestUtils.generateSelfSignedCertificate(rootKeyPair, "CN=TestRoot",
-				notBefore, notAfter);
+		KeyPair rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
+		X509Certificate rootCertificate = new PKIBuilder.CertificateBuilder(rootKeyPair).withSubjectName("CN=TestRoot")
+				.withValidityMonths(1).build();
 
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
-		X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=Test", notBefore,
-				notAfter, rootCertificate, rootKeyPair.getPrivate());
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
+		X509Certificate certificate = new PKIBuilder.CertificateBuilder(keyPair.getPublic(), rootKeyPair.getPrivate(),
+				rootCertificate).withSubjectName("CN=Test").withValidityMonths(1).build();
 
 		PublicKeyTrustLinker publicKeyTrustLinker = new PublicKeyTrustLinker();
 
@@ -77,68 +74,62 @@ public class PublicKeyTrustLinkerTest {
 	@Test
 	public void testExpiredCertificate() throws Exception {
 		// setup
-		KeyPair rootKeyPair = PKITestUtils.generateKeyPair();
+		KeyPair rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
-		X509Certificate rootCertificate = PKITestUtils.generateSelfSignedCertificate(rootKeyPair, "CN=TestRoot",
-				notBefore, notAfter);
+		X509Certificate rootCertificate = new PKIBuilder.CertificateBuilder(rootKeyPair).withSubjectName("CN=TestRoot")
+				.withValidityMonths(1).build();
 
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
-		X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=Test", notBefore,
-				notAfter, rootCertificate, rootKeyPair.getPrivate());
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
+		X509Certificate certificate = new PKIBuilder.CertificateBuilder(keyPair.getPublic(), rootKeyPair.getPrivate(),
+				rootCertificate).withSubjectName("CN=Test").withValidityMonths(1).build();
 
 		PublicKeyTrustLinker publicKeyTrustLinker = new PublicKeyTrustLinker();
 
 		Date validationDate = Date.from(notAfter.plusDays(1).atZone(ZoneId.systemDefault()).toInstant());
 
 		// operate
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			publicKeyTrustLinker.hasTrustLink(certificate, rootCertificate, validationDate, new RevocationData(),
 					new DefaultAlgorithmPolicy());
-			fail();
-		} catch (TrustLinkerResultException e) {
-			assertEquals(TrustLinkerResultReason.INVALID_VALIDITY_INTERVAL, e.getReason());
-		}
+		});
+		assertEquals(TrustLinkerResultReason.INVALID_VALIDITY_INTERVAL, result.getReason());
+
 	}
 
 	@Test
 	public void testCertificateNotYetValid() throws Exception {
 		// setup
-		KeyPair rootKeyPair = PKITestUtils.generateKeyPair();
+		KeyPair rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
-		LocalDateTime notAfter = notBefore.plusMonths(1);
-		X509Certificate rootCertificate = PKITestUtils.generateSelfSignedCertificate(rootKeyPair, "CN=TestRoot",
-				notBefore, notAfter);
+		X509Certificate rootCertificate = new PKIBuilder.CertificateBuilder(rootKeyPair).withSubjectName("CN=TestRoot")
+				.withValidityMonths(1).build();
 
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
-		X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=Test", notBefore,
-				notAfter, rootCertificate, rootKeyPair.getPrivate());
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
+		X509Certificate certificate = new PKIBuilder.CertificateBuilder(keyPair.getPublic(), rootKeyPair.getPrivate(),
+				rootCertificate).withSubjectName("CN=Test").withValidityMonths(1).build();
 
 		PublicKeyTrustLinker publicKeyTrustLinker = new PublicKeyTrustLinker();
 
 		Date validationDate = Date.from(notBefore.minusDays(1).atZone(ZoneId.systemDefault()).toInstant());
 
 		// operate
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			publicKeyTrustLinker.hasTrustLink(certificate, rootCertificate, validationDate, new RevocationData(),
 					new DefaultAlgorithmPolicy());
-			fail();
-		} catch (TrustLinkerResultException e) {
-			assertEquals(TrustLinkerResultReason.INVALID_VALIDITY_INTERVAL, e.getReason());
-		}
+		});
+		assertEquals(TrustLinkerResultReason.INVALID_VALIDITY_INTERVAL, result.getReason());
 	}
 
 	@Test
 	public void testNoCaFlagFailsNotOnRootCAs() throws Exception {
-		KeyPair rootKeyPair = PKITestUtils.generateKeyPair();
-		LocalDateTime notBefore = LocalDateTime.now();
-		LocalDateTime notAfter = notBefore.plusMonths(1);
-		X509Certificate rootCertificate = PKITestUtils.generateSelfSignedCertificate(rootKeyPair, "CN=TestRoot",
-				notBefore, notAfter, false);
+		KeyPair rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
+		X509Certificate rootCertificate = new PKIBuilder.CertificateBuilder(rootKeyPair).withSubjectName("CN=TestRoot")
+				.withValidityMonths(1).build();
 
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
-		X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=Test", notBefore,
-				notAfter, rootCertificate, rootKeyPair.getPrivate());
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
+		X509Certificate certificate = new PKIBuilder.CertificateBuilder(keyPair.getPublic(), rootKeyPair.getPrivate(),
+				rootCertificate).withSubjectName("CN=Test").withValidityMonths(1).build();
 
 		PublicKeyTrustLinker publicKeyTrustLinker = new PublicKeyTrustLinker();
 
@@ -153,127 +144,180 @@ public class PublicKeyTrustLinkerTest {
 
 	@Test
 	public void testNoCaFlagFails() throws Exception {
-		KeyPair rootKeyPair = PKITestUtils.generateKeyPair();
-		LocalDateTime notBefore = LocalDateTime.now();
-		LocalDateTime notAfter = notBefore.plusMonths(1);
-		X509Certificate rootCertificate = PKITestUtils.generateSelfSignedCertificate(rootKeyPair, "CN=TestRoot",
-				notBefore, notAfter, false);
+		KeyPair rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
+		X509Certificate rootCertificate = new PKIBuilder.CertificateBuilder(rootKeyPair).withSubjectName("CN=TestRoot")
+				.withValidityMonths(1).build();
 
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
-		X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=Test", notBefore,
-				notAfter, rootCertificate, rootKeyPair.getPrivate(), false);
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
+		X509Certificate certificate = new PKIBuilder.CertificateBuilder(keyPair.getPublic(), rootKeyPair.getPrivate(),
+				rootCertificate).withSubjectName("CN=Test").withValidityMonths(1).build();
 
-		KeyPair keyPair2 = PKITestUtils.generateKeyPair();
-		X509Certificate certificate2 = PKITestUtils.generateCertificate(keyPair2.getPublic(), "CN=Test 2", notBefore,
-				notAfter, certificate, keyPair.getPrivate(), false);
+		KeyPair keyPair2 = new PKIBuilder.KeyPairBuilder().build();
+		X509Certificate certificate2 = new PKIBuilder.CertificateBuilder(keyPair2.getPublic(), keyPair.getPrivate(),
+				certificate).withSubjectName("CN=Test 2").withValidityMonths(1).build();
 
 		PublicKeyTrustLinker publicKeyTrustLinker = new PublicKeyTrustLinker();
 
 		Date validationDate = new Date();
 
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			publicKeyTrustLinker.hasTrustLink(certificate2, certificate, validationDate, new RevocationData(),
 					new DefaultAlgorithmPolicy());
-			fail();
-		} catch (TrustLinkerResultException ex) {
-			// expected
-			assertEquals(TrustLinkerResultReason.NO_TRUST, ex.getReason());
-		}
+		});
+		assertEquals(TrustLinkerResultReason.NO_TRUST, result.getReason());
+	}
+
+	@Test
+	public void testNoCaFlagFails2() throws Exception {
+		KeyPair rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
+		X509Certificate rootCertificate = new PKIBuilder.CertificateBuilder(rootKeyPair).withSubjectName("CN=TestRoot")
+				.withValidityMonths(1).build();
+
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
+		X509Certificate certificate = new PKIBuilder.CertificateBuilder(keyPair.getPublic(), rootKeyPair.getPrivate(),
+				rootCertificate).withSubjectName("CN=Test").withValidityMonths(1).withBasicConstraints(false).build();
+
+		KeyPair keyPair2 = new PKIBuilder.KeyPairBuilder().build();
+		X509Certificate certificate2 = new PKIBuilder.CertificateBuilder(keyPair2.getPublic(), keyPair.getPrivate(),
+				certificate).withSubjectName("CN=Test 2").withValidityMonths(1).build();
+
+		PublicKeyTrustLinker publicKeyTrustLinker = new PublicKeyTrustLinker();
+
+		Date validationDate = new Date();
+
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
+			publicKeyTrustLinker.hasTrustLink(certificate2, certificate, validationDate, new RevocationData(),
+					new DefaultAlgorithmPolicy());
+		});
+		assertEquals(TrustLinkerResultReason.NO_TRUST, result.getReason());
+	}
+
+	@Test
+	public void testNoCaFlagFails3() throws Exception {
+		KeyPair rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
+		X509Certificate rootCertificate = new PKIBuilder.CertificateBuilder(rootKeyPair).withSubjectName("CN=TestRoot")
+				.withValidityMonths(1).build();
+
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
+		X509Certificate certificate = new PKIBuilder.CertificateBuilder(keyPair.getPublic(), rootKeyPair.getPrivate(),
+				rootCertificate).withSubjectName("CN=Test").withValidityMonths(1).withBasicConstraints(false).build();
+
+		KeyPair keyPair2 = new PKIBuilder.KeyPairBuilder().build();
+		X509Certificate certificate2 = new PKIBuilder.CertificateBuilder(keyPair2.getPublic(), keyPair.getPrivate(),
+				certificate).withSubjectName("CN=Test 2").withValidityMonths(1).withBasicConstraints(true).build();
+
+		PublicKeyTrustLinker publicKeyTrustLinker = new PublicKeyTrustLinker();
+
+		Date validationDate = new Date();
+
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
+			publicKeyTrustLinker.hasTrustLink(certificate2, certificate, validationDate, new RevocationData(),
+					new DefaultAlgorithmPolicy());
+		});
+		assertEquals(TrustLinkerResultReason.NO_TRUST, result.getReason());
 	}
 
 	@Test
 	public void testChildNotAllowToBeCA() throws Exception {
 		// setup
-		KeyPair rootKeyPair = PKITestUtils.generateKeyPair();
-		LocalDateTime notBefore = LocalDateTime.now();
-		LocalDateTime notAfter = notBefore.plusMonths(1);
-		X509Certificate rootCertificate = PKITestUtils.generateSelfSignedCertificate(rootKeyPair, "CN=TestRoot",
-				notBefore, notAfter, true, 0);
+		KeyPair rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
+		X509Certificate rootCertificate = new PKIBuilder.CertificateBuilder(rootKeyPair).withSubjectName("CN=TestRoot")
+				.withValidityMonths(1).withBasicConstraints(0).build();
 
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
-		X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=Test", notBefore,
-				notAfter, rootCertificate, rootKeyPair.getPrivate(), true);
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
+		X509Certificate certificate = new PKIBuilder.CertificateBuilder(keyPair.getPublic(), rootKeyPair.getPrivate(),
+				rootCertificate).withSubjectName("CN=Test").withValidityMonths(1).withBasicConstraints(true).build();
 
 		PublicKeyTrustLinker publicKeyTrustLinker = new PublicKeyTrustLinker();
 
 		Date validationDate = new Date();
 
 		// operate & verify
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			publicKeyTrustLinker.hasTrustLink(certificate, rootCertificate, validationDate, new RevocationData(),
 					new DefaultAlgorithmPolicy());
-			fail();
-		} catch (TrustLinkerResultException e) {
-			assertEquals(TrustLinkerResultReason.NO_TRUST, e.getReason());
-		}
+		});
+		assertEquals(TrustLinkerResultReason.NO_TRUST, result.getReason());
+	}
+
+	@Test
+	public void testChildNotAllowToBeCA2() throws Exception {
+		// setup
+		KeyPair rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
+		X509Certificate rootCertificate = new PKIBuilder.CertificateBuilder(rootKeyPair).withSubjectName("CN=TestRoot")
+				.withValidityMonths(1).withBasicConstraints(0).build();
+
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
+		X509Certificate certificate = new PKIBuilder.CertificateBuilder(keyPair.getPublic(), rootKeyPair.getPrivate(),
+				rootCertificate).withSubjectName("CN=Test").withValidityMonths(1).withBasicConstraints(false).build();
+
+		PublicKeyTrustLinker publicKeyTrustLinker = new PublicKeyTrustLinker();
+
+		Date validationDate = new Date();
+
+		// operate & verify
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
+			publicKeyTrustLinker.hasTrustLink(certificate, rootCertificate, validationDate, new RevocationData(),
+					new DefaultAlgorithmPolicy());
+		});
+		assertEquals(TrustLinkerResultReason.NO_TRUST, result.getReason());
 	}
 
 	@Test
 	public void testNoChildFails() throws Exception {
 		// setup
-		KeyPair rootKeyPair = PKITestUtils.generateKeyPair();
-		LocalDateTime notBefore = LocalDateTime.now();
-		LocalDateTime notAfter = notBefore.plusMonths(1);
-		X509Certificate rootCertificate = PKITestUtils.generateSelfSignedCertificate(rootKeyPair, "CN=TestRoot",
-				notBefore, notAfter);
+		KeyPair rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
+		X509Certificate rootCertificate = new PKIBuilder.CertificateBuilder(rootKeyPair).withSubjectName("CN=TestRoot")
+				.withValidityMonths(1).build();
 
-		KeyPair root2keyPair = PKITestUtils.generateKeyPair();
-		X509Certificate root2Certificate = PKITestUtils.generateSelfSignedCertificate(root2keyPair, "CN=TestRoot2",
-				notBefore, notAfter);
+		KeyPair root2keyPair = new PKIBuilder.KeyPairBuilder().build();
+		X509Certificate root2Certificate = new PKIBuilder.CertificateBuilder(root2keyPair)
+				.withSubjectName("CN=TestRoot2").withValidityMonths(1).build();
 
 		PublicKeyTrustLinker publicKeyTrustLinker = new PublicKeyTrustLinker();
 
 		Date validationDate = new Date();
 
 		// operate & verify
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			publicKeyTrustLinker.hasTrustLink(root2Certificate, rootCertificate, validationDate, new RevocationData(),
 					new DefaultAlgorithmPolicy());
-			fail();
-		} catch (TrustLinkerResultException e) {
-			assertEquals(TrustLinkerResultReason.NO_TRUST, e.getReason());
-		}
+		});
+		assertEquals(TrustLinkerResultReason.NO_TRUST, result.getReason());
 	}
 
 	@Test
 	public void testCACertificateNoSKID() throws Exception {
-		KeyPair rootKeyPair = PKITestUtils.generateKeyPair();
-		LocalDateTime notBefore = LocalDateTime.now();
-		LocalDateTime notAfter = notBefore.plusMonths(1);
-		X509Certificate rootCertificate = PKITestUtils.generateCertificate(rootKeyPair.getPublic(), "CN=TestRoot",
-				notBefore, notAfter, null, rootKeyPair.getPrivate(), true, -1, null, null, null, "SHA1withRSA", false,
-				false, true);
+		KeyPair rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
+		X509Certificate rootCertificate = new PKIBuilder.CertificateBuilder(rootKeyPair).withSubjectName("CN=TestRoot")
+				.withValidityMonths(1).withBasicConstraints(true).withAKIDPublicKey(rootKeyPair.getPublic()).build();
 
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
-		X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=Test", notBefore,
-				notAfter, rootCertificate, rootKeyPair.getPrivate());
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
+		X509Certificate certificate = new PKIBuilder.CertificateBuilder(keyPair.getPublic(), rootKeyPair.getPrivate(),
+				rootCertificate).withSubjectName("CN=Test").withValidityMonths(1).build();
 
 		PublicKeyTrustLinker publicKeyTrustLinker = new PublicKeyTrustLinker();
 
 		Date validationDate = new Date();
 
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			publicKeyTrustLinker.hasTrustLink(certificate, rootCertificate, validationDate, new RevocationData(),
 					new DefaultAlgorithmPolicy());
-			fail();
-		} catch (TrustLinkerResultException e) {
-			assertEquals(TrustLinkerResultReason.NO_TRUST, e.getReason());
-		}
+		});
+		assertEquals(TrustLinkerResultReason.NO_TRUST, result.getReason());
 	}
 
 	@Test
 	public void testChildCACertificateNoAKIDNotSelfSigned() throws Exception {
 		// setup
-		KeyPair rootKeyPair = PKITestUtils.generateKeyPair();
-		LocalDateTime notBefore = LocalDateTime.now();
-		LocalDateTime notAfter = notBefore.plusMonths(1);
-		X509Certificate rootCertificate = PKITestUtils.generateSelfSignedCertificate(rootKeyPair, "CN=TestRoot",
-				notBefore, notAfter);
+		KeyPair rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
+		X509Certificate rootCertificate = new PKIBuilder.CertificateBuilder(rootKeyPair).withSubjectName("CN=TestRoot")
+				.withValidityMonths(1).build();
 
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
-		X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=Test", notBefore,
-				notAfter, rootCertificate, rootKeyPair.getPrivate(), true, -1, null, null, null, "SHA1withRSA", false,
-				true, false);
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
+		X509Certificate certificate = new PKIBuilder.CertificateBuilder(keyPair.getPublic(), rootKeyPair.getPrivate(),
+				rootCertificate).withSubjectName("CN=Test").withValidityMonths(1).withIncludeSKID()
+				.withBasicConstraints(true).build();
 
 		PublicKeyTrustLinker publicKeyTrustLinker = new PublicKeyTrustLinker();
 
@@ -289,28 +333,24 @@ public class PublicKeyTrustLinkerTest {
 
 	@Test
 	public void testAKIDMisMatchSKID() throws Exception {
-		KeyPair rootKeyPair = PKITestUtils.generateKeyPair();
-		LocalDateTime notBefore = LocalDateTime.now();
-		LocalDateTime notAfter = notBefore.plusMonths(1);
-		X509Certificate rootCertificate = PKITestUtils.generateSelfSignedCertificate(rootKeyPair, "CN=TestRoot",
-				notBefore, notAfter);
+		KeyPair rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
+		X509Certificate rootCertificate = new PKIBuilder.CertificateBuilder(rootKeyPair).withSubjectName("CN=TestRoot")
+				.withValidityMonths(1).withIncludeSKID().build();
 
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
-		KeyPair akidKeyPair = PKITestUtils.generateKeyPair();
-		X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=Test", notBefore,
-				notAfter, rootCertificate, rootKeyPair.getPrivate(), true, -1, null, null, null, "SHA1withRSA", false,
-				true, true, akidKeyPair.getPublic());
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
+		KeyPair akidKeyPair = new PKIBuilder.KeyPairBuilder().build();
+		X509Certificate certificate = new PKIBuilder.CertificateBuilder(keyPair.getPublic(), rootKeyPair.getPrivate(),
+				rootCertificate).withSubjectName("CN=Test").withValidityMonths(1)
+				.withAKIDPublicKey(akidKeyPair.getPublic()).withIncludeAKID().withIncludeSKID().build();
 
 		PublicKeyTrustLinker publicKeyTrustLinker = new PublicKeyTrustLinker();
 
 		Date validationDate = new Date();
 
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			publicKeyTrustLinker.hasTrustLink(certificate, rootCertificate, validationDate, new RevocationData(),
 					new DefaultAlgorithmPolicy());
-			fail();
-		} catch (TrustLinkerResultException e) {
-			assertEquals(TrustLinkerResultReason.NO_TRUST, e.getReason());
-		}
+		});
+		assertEquals(TrustLinkerResultReason.NO_TRUST, result.getReason());
 	}
 }

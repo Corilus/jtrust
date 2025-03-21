@@ -1,7 +1,7 @@
 /*
  * Java Trust Project.
  * Copyright (C) 2009 FedICT.
- * Copyright (C) 2014-2021 e-Contract.be BV.
+ * Copyright (C) 2014-2023 e-Contract.be BV.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -16,11 +16,9 @@
  * License along with this software; if not, see 
  * http://www.gnu.org/licenses/.
  */
-
 package test.unit.be.fedict.trust;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
 
 import java.security.KeyPair;
 import java.security.Security;
@@ -34,6 +32,7 @@ import java.util.List;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.easymock.EasyMock;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -46,6 +45,7 @@ import be.fedict.trust.linker.TrustLinkerResultReason;
 import be.fedict.trust.policy.AlgorithmPolicy;
 import be.fedict.trust.policy.DefaultAlgorithmPolicy;
 import be.fedict.trust.repository.CertificateRepository;
+import be.fedict.trust.test.PKIBuilder;
 import be.fedict.trust.test.PKITestUtils;
 
 public class TrustValidatorTest {
@@ -63,14 +63,10 @@ public class TrustValidatorTest {
 	@Test
 	public void emptyCertPathFails() throws Exception {
 		TrustValidator trustValidator = new TrustValidator(null);
-
-		try {
-			trustValidator.isTrusted(new LinkedList<X509Certificate>());
-			fail();
-		} catch (TrustLinkerResultException e) {
-			// expected
-			assertEquals(TrustLinkerResultReason.UNSPECIFIED, e.getReason());
-		}
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
+			trustValidator.isTrusted(new LinkedList<>());
+		});
+		assertEquals(TrustLinkerResultReason.UNSPECIFIED, result.getReason());
 	}
 
 	@Test
@@ -82,18 +78,15 @@ public class TrustValidatorTest {
 		TrustValidator trustValidator = new TrustValidator(null);
 
 		// operate & verify
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			trustValidator.isTrusted(certificateChain);
-			fail();
-		} catch (TrustLinkerResultException e) {
-			// expected
-			assertEquals(TrustLinkerResultReason.UNSPECIFIED, e.getReason());
-		}
+		});
+		assertEquals(TrustLinkerResultReason.UNSPECIFIED, result.getReason());
 	}
 
 	@Test
 	public void doNotTrustUnknownCertificate() throws Exception {
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		X509Certificate certificate = PKITestUtils.generateSelfSignedCertificate(keyPair, "CN=Test", notBefore,
@@ -107,18 +100,15 @@ public class TrustValidatorTest {
 		List<X509Certificate> certificatePath = new LinkedList<>();
 		certificatePath.add(certificate);
 
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			trustValidator.isTrusted(certificatePath);
-			fail();
-		} catch (TrustLinkerResultException e) {
-			// expected
-			assertEquals(TrustLinkerResultReason.ROOT, e.getReason());
-		}
+		});
+		assertEquals(TrustLinkerResultReason.ROOT, result.getReason());
 	}
 
 	@Test
 	public void trustKnownCertificate() throws Exception {
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		X509Certificate certificate = PKITestUtils.generateSelfSignedCertificate(keyPair, "CN=Test", notBefore,
@@ -141,7 +131,7 @@ public class TrustValidatorTest {
 
 	@Test
 	public void trustKnownCertificateSHA256WithRSA() throws Exception {
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		X509Certificate certificate = PKITestUtils.generateSelfSignedCertificate(keyPair, "CN=test", notBefore,
@@ -164,7 +154,7 @@ public class TrustValidatorTest {
 
 	@Test
 	public void doNotTrustExpiredCertificate() throws Exception {
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now().plusMonths(2);
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		X509Certificate certificate = PKITestUtils.generateSelfSignedCertificate(keyPair, "CN=Test", notBefore,
@@ -180,19 +170,16 @@ public class TrustValidatorTest {
 
 		EasyMock.replay(mockCertificateRepository);
 
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			trustValidator.isTrusted(certificatePath);
-			fail();
-		} catch (TrustLinkerResultException e) {
-			// expected
-			assertEquals(TrustLinkerResultReason.INVALID_VALIDITY_INTERVAL, e.getReason());
-			EasyMock.verify(mockCertificateRepository);
-		}
+		});
+		assertEquals(TrustLinkerResultReason.INVALID_VALIDITY_INTERVAL, result.getReason());
+		EasyMock.verify(mockCertificateRepository);
 	}
 
 	@Test
 	public void historicalTrustExpiredCertificate() throws Exception {
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now().plusMonths(2);
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		X509Certificate certificate = PKITestUtils.generateSelfSignedCertificate(keyPair, "CN=Test", notBefore,
@@ -214,13 +201,13 @@ public class TrustValidatorTest {
 
 	@Test
 	public void notSelfSignedNotTrusted() throws Exception {
-		KeyPair rootKeyPair = PKITestUtils.generateKeyPair();
+		KeyPair rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		X509Certificate rootCertificate = PKITestUtils.generateSelfSignedCertificate(rootKeyPair, "CN=TestRoot",
 				notBefore, notAfter);
 
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=Test", notBefore,
 				notAfter, rootCertificate, rootKeyPair.getPrivate());
 
@@ -232,25 +219,22 @@ public class TrustValidatorTest {
 
 		EasyMock.replay(mockCertificateRepository);
 
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			trustValidator.isTrusted(certificatePath);
-			fail();
-		} catch (TrustLinkerResultException e) {
-			// expected
-			assertEquals(TrustLinkerResultReason.NO_TRUST, e.getReason());
-			EasyMock.verify(mockCertificateRepository);
-		}
+		});
+		assertEquals(TrustLinkerResultReason.NO_TRUST, result.getReason());
+		EasyMock.verify(mockCertificateRepository);
 	}
 
 	@Test
 	public void claimedSelfSignedNotTrusted() throws Exception {
-		KeyPair rootKeyPair = PKITestUtils.generateKeyPair();
+		KeyPair rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		X509Certificate rootCertificate = PKITestUtils.generateSelfSignedCertificate(rootKeyPair, "CN=TestRoot",
 				notBefore, notAfter);
 
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=TestRoot", notBefore,
 				notAfter, rootCertificate, rootKeyPair.getPrivate());
 
@@ -262,25 +246,22 @@ public class TrustValidatorTest {
 
 		EasyMock.replay(mockCertificateRepository);
 
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			trustValidator.isTrusted(certificatePath);
-			fail();
-		} catch (TrustLinkerResultException e) {
-			// expected
-			assertEquals(TrustLinkerResultReason.INVALID_SIGNATURE, e.getReason());
-			EasyMock.verify(mockCertificateRepository);
-		}
+		});
+		assertEquals(TrustLinkerResultReason.INVALID_SIGNATURE, result.getReason());
+		EasyMock.verify(mockCertificateRepository);
 	}
 
 	@Test
 	public void noTrustLinkerFails() throws Exception {
-		KeyPair rootKeyPair = PKITestUtils.generateKeyPair();
+		KeyPair rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		X509Certificate rootCertificate = PKITestUtils.generateSelfSignedCertificate(rootKeyPair, "CN=TestRoot",
 				notBefore, notAfter);
 
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=Test", notBefore,
 				notAfter, rootCertificate, rootKeyPair.getPrivate());
 
@@ -295,25 +276,22 @@ public class TrustValidatorTest {
 
 		EasyMock.replay(mockCertificateRepository);
 
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			trustValidator.isTrusted(certificatePath);
-			fail();
-		} catch (TrustLinkerResultException e) {
-			// expected
-			assertEquals(TrustLinkerResultReason.NO_TRUST, e.getReason());
-			EasyMock.verify(mockCertificateRepository);
-		}
+		});
+		assertEquals(TrustLinkerResultReason.NO_TRUST, result.getReason());
+		EasyMock.verify(mockCertificateRepository);
 	}
 
 	@Test
 	public void testTrustLinkerExplodes() throws Exception {
-		KeyPair rootKeyPair = PKITestUtils.generateKeyPair();
+		KeyPair rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		X509Certificate rootCertificate = PKITestUtils.generateSelfSignedCertificate(rootKeyPair, "CN=TestRoot",
 				notBefore, notAfter);
 
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=Test", notBefore,
 				notAfter, rootCertificate, rootKeyPair.getPrivate());
 
@@ -336,25 +314,23 @@ public class TrustValidatorTest {
 
 		EasyMock.replay(mockCertificateRepository, mockTrustLinker);
 
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			trustValidator.isTrusted(certificatePath, validationDate);
-			fail();
-		} catch (TrustLinkerResultException e) {
-			// expected
-		}
+		});
+		assertEquals(TrustLinkerResultReason.UNSPECIFIED, result.getReason());
 
 		EasyMock.verify(mockCertificateRepository, mockTrustLinker);
 	}
 
 	@Test
 	public void trustLink() throws Exception {
-		KeyPair rootKeyPair = PKITestUtils.generateKeyPair();
+		KeyPair rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		X509Certificate rootCertificate = PKITestUtils.generateSelfSignedCertificate(rootKeyPair, "CN=TestRoot",
 				notBefore, notAfter);
 
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=Test", notBefore,
 				notAfter, rootCertificate, rootKeyPair.getPrivate());
 
@@ -384,13 +360,13 @@ public class TrustValidatorTest {
 
 	@Test
 	public void trustLinkMD5Certificate() throws Exception {
-		KeyPair rootKeyPair = PKITestUtils.generateKeyPair();
+		KeyPair rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		X509Certificate rootCertificate = PKITestUtils.generateSelfSignedCertificate(rootKeyPair, "CN=TestRoot",
 				notBefore, notAfter);
 
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=Test", notBefore,
 				notAfter, rootCertificate, rootKeyPair.getPrivate(), true, -1, null, null, null, "MD5withRSA");
 
@@ -412,24 +388,21 @@ public class TrustValidatorTest {
 
 		EasyMock.replay(mockCertificateRepository, mockTrustLinker);
 
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			trustValidator.isTrusted(certificatePath, validationDate);
-			fail();
-		} catch (TrustLinkerResultException e) {
-			// expected
-			assertEquals(TrustLinkerResultReason.INVALID_ALGORITHM, e.getReason());
-		}
+		});
+		assertEquals(TrustLinkerResultReason.INVALID_ALGORITHM, result.getReason());
 	}
 
 	@Test
 	public void trustMD5CertificateAllowedViaAlgorithmPolicy() throws Exception {
-		KeyPair rootKeyPair = PKITestUtils.generateKeyPair();
+		KeyPair rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		X509Certificate rootCertificate = PKITestUtils.generateSelfSignedCertificate(rootKeyPair, "CN=TestRoot",
 				notBefore, notAfter);
 
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=Test", notBefore,
 				notAfter, rootCertificate, rootKeyPair.getPrivate(), true, -1, null, null, null, "MD5withRSA");
 
@@ -465,13 +438,13 @@ public class TrustValidatorTest {
 
 	@Test
 	public void trustWithCertificateConstraint() throws Exception {
-		KeyPair rootKeyPair = PKITestUtils.generateKeyPair();
+		KeyPair rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		X509Certificate rootCertificate = PKITestUtils.generateSelfSignedCertificate(rootKeyPair, "CN=TestRoot",
 				notBefore, notAfter);
 
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=Test", notBefore,
 				notAfter, rootCertificate, rootKeyPair.getPrivate());
 
@@ -505,13 +478,13 @@ public class TrustValidatorTest {
 
 	@Test
 	public void trustInvalidCertificateConstraint() throws Exception {
-		KeyPair rootKeyPair = PKITestUtils.generateKeyPair();
+		KeyPair rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		X509Certificate rootCertificate = PKITestUtils.generateSelfSignedCertificate(rootKeyPair, "CN=TestRoot",
 				notBefore, notAfter);
 
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=Test", notBefore,
 				notAfter, rootCertificate, rootKeyPair.getPrivate());
 
@@ -540,30 +513,26 @@ public class TrustValidatorTest {
 
 		EasyMock.replay(mockCertificateRepository, mockCertificateConstraint, mockTrustLinker);
 
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			trustValidator.isTrusted(certificatePath, validationDate);
-			fail();
-		} catch (TrustLinkerResultException e) {
-			// expected
-			assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, e.getReason());
-			EasyMock.verify(mockCertificateRepository, mockCertificateConstraint, mockTrustLinker);
-		}
-
+		});
+		assertEquals(TrustLinkerResultReason.CONSTRAINT_VIOLATION, result.getReason());
+		EasyMock.verify(mockCertificateRepository, mockCertificateConstraint, mockTrustLinker);
 	}
 
 	@Test
 	public void trustLinkThreeCertificates() throws Exception {
-		KeyPair rootKeyPair = PKITestUtils.generateKeyPair();
+		KeyPair rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		X509Certificate rootCertificate = PKITestUtils.generateSelfSignedCertificate(rootKeyPair, "CN=TestRoot",
 				notBefore, notAfter);
 
-		KeyPair interKeyPair = PKITestUtils.generateKeyPair();
+		KeyPair interKeyPair = new PKIBuilder.KeyPairBuilder().build();
 		X509Certificate interCertificate = PKITestUtils.generateCertificate(interKeyPair.getPublic(), "CN=Inter",
 				notBefore, notAfter, rootCertificate, rootKeyPair.getPrivate());
 
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=Test", notBefore,
 				notAfter, interCertificate, interKeyPair.getPrivate());
 
@@ -597,13 +566,13 @@ public class TrustValidatorTest {
 
 	@Test
 	public void noTrustLinkFails() throws Exception {
-		KeyPair rootKeyPair = PKITestUtils.generateKeyPair();
+		KeyPair rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		X509Certificate rootCertificate = PKITestUtils.generateSelfSignedCertificate(rootKeyPair, "CN=TestRoot",
 				notBefore, notAfter);
 
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=Test", notBefore,
 				notAfter, rootCertificate, rootKeyPair.getPrivate());
 
@@ -626,24 +595,22 @@ public class TrustValidatorTest {
 
 		EasyMock.replay(mockCertificateRepository, mockTrustLinker);
 
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			trustValidator.isTrusted(certificatePath, validationDate);
-			fail();
-		} catch (TrustLinkerResultException e) {
-			// expected
-			EasyMock.verify(mockCertificateRepository, mockTrustLinker);
-		}
+		});
+		assertEquals(TrustLinkerResultReason.NO_TRUST, result.getReason());
+		EasyMock.verify(mockCertificateRepository, mockTrustLinker);
 	}
 
 	@Test
 	public void oneTrustLinkerNoFails() throws Exception {
-		KeyPair rootKeyPair = PKITestUtils.generateKeyPair();
+		KeyPair rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		X509Certificate rootCertificate = PKITestUtils.generateSelfSignedCertificate(rootKeyPair, "CN=TestRoot",
 				notBefore, notAfter);
 
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=Test", notBefore,
 				notAfter, rootCertificate, rootKeyPair.getPrivate());
 
@@ -677,13 +644,13 @@ public class TrustValidatorTest {
 
 	@Test
 	public void unknownTrustLinkFails() throws Exception {
-		KeyPair rootKeyPair = PKITestUtils.generateKeyPair();
+		KeyPair rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		X509Certificate rootCertificate = PKITestUtils.generateSelfSignedCertificate(rootKeyPair, "CN=TestRoot",
 				notBefore, notAfter);
 
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=Test", notBefore,
 				notAfter, rootCertificate, rootKeyPair.getPrivate());
 
@@ -706,25 +673,22 @@ public class TrustValidatorTest {
 
 		EasyMock.replay(mockCertificateRepository, mockTrustLinker);
 
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			trustValidator.isTrusted(certificatePath, validationDate);
-			fail();
-		} catch (TrustLinkerResultException e) {
-			// expected
-			assertEquals(TrustLinkerResultReason.NO_TRUST, e.getReason());
-			EasyMock.verify(mockCertificateRepository, mockTrustLinker);
-		}
+		});
+		assertEquals(TrustLinkerResultReason.NO_TRUST, result.getReason());
+		EasyMock.verify(mockCertificateRepository, mockTrustLinker);
 	}
 
 	@Test
 	public void trustLinkerRevocationFails() throws Exception {
-		KeyPair rootKeyPair = PKITestUtils.generateKeyPair();
+		KeyPair rootKeyPair = new PKIBuilder.KeyPairBuilder().build();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusMonths(1);
 		X509Certificate rootCertificate = PKITestUtils.generateSelfSignedCertificate(rootKeyPair, "CN=TestRoot",
 				notBefore, notAfter);
 
-		KeyPair keyPair = PKITestUtils.generateKeyPair();
+		KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 		X509Certificate certificate = PKITestUtils.generateCertificate(keyPair.getPublic(), "CN=Test", notBefore,
 				notAfter, rootCertificate, rootKeyPair.getPrivate());
 
@@ -748,13 +712,10 @@ public class TrustValidatorTest {
 
 		EasyMock.replay(mockCertificateRepository, mockTrustLinker);
 
-		try {
+		TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 			trustValidator.isTrusted(certificatePath, validationDate);
-			fail();
-		} catch (TrustLinkerResultException e) {
-			// expected
-			assertEquals(TrustLinkerResultReason.INVALID_REVOCATION_STATUS, e.getReason());
-			EasyMock.verify(mockCertificateRepository, mockTrustLinker);
-		}
+		});
+		assertEquals(TrustLinkerResultReason.INVALID_REVOCATION_STATUS, result.getReason());
+		EasyMock.verify(mockCertificateRepository, mockTrustLinker);
 	}
 }

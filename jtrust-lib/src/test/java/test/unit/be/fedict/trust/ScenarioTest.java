@@ -1,6 +1,6 @@
 /*
  * Java Trust Project.
- * Copyright (C) 2018-2021 e-Contract.be BV.
+ * Copyright (C) 2018-2023 e-Contract.be BV.
  *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
@@ -15,12 +15,10 @@
  * License along with this software; if not, see 
  * http://www.gnu.org/licenses/.
  */
-
 package test.unit.be.fedict.trust;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.fail;
 
 import java.security.KeyPair;
 import java.security.Security;
@@ -34,6 +32,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -43,6 +42,7 @@ import be.fedict.trust.TrustValidator;
 import be.fedict.trust.TrustValidatorDecorator;
 import be.fedict.trust.crl.OnlineCrlRepository;
 import be.fedict.trust.linker.TrustLinkerResultException;
+import be.fedict.trust.linker.TrustLinkerResultReason;
 import be.fedict.trust.repository.MemoryCertificateRepository;
 import be.fedict.trust.test.BasicFailBehavior;
 import be.fedict.trust.test.BasicOCSPFailBehavior;
@@ -51,6 +51,7 @@ import be.fedict.trust.test.CertificationAuthority;
 import be.fedict.trust.test.Clock;
 import be.fedict.trust.test.FixedClock;
 import be.fedict.trust.test.OCSPRevocationService;
+import be.fedict.trust.test.PKIBuilder;
 import be.fedict.trust.test.PKITestUtils;
 import be.fedict.trust.test.TimeStampAuthority;
 import be.fedict.trust.test.World;
@@ -91,12 +92,10 @@ public class ScenarioTest {
 			MemoryCertificateRepository memoryCertificateRepository = new MemoryCertificateRepository();
 			TrustValidator trustValidator = new TrustValidator(memoryCertificateRepository);
 
-			try {
+			TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 				trustValidator.isTrusted(Collections.singletonList(rootCert));
-				fail();
-			} catch (TrustLinkerResultException e) {
-				// expected
-			}
+			});
+			assertEquals(TrustLinkerResultReason.ROOT, result.getReason());
 		}
 	}
 
@@ -164,10 +163,6 @@ public class ScenarioTest {
 			certificationAuthority.setSignatureAlgorithm("SHA256withECDSA");
 			world.start();
 
-			KeyPair keyPair = PKITestUtils.generateKeyPair("EC");
-			X509Certificate certificate = certificationAuthority.issueSigningCertificate(keyPair.getPublic(),
-					"CN=Signing");
-
 			X509Certificate rootCert = certificationAuthority.getCertificate();
 			LOGGER.debug("certificate: {}", rootCert);
 
@@ -189,13 +184,13 @@ public class ScenarioTest {
 
 			X509Certificate rootCert = certificationAuthority.getCertificate();
 
-			KeyPair validKeyPair = PKITestUtils.generateKeyPair();
+			KeyPair validKeyPair = new PKIBuilder.KeyPairBuilder().build();
 			X509Certificate validCertificate = certificationAuthority.issueSigningCertificate(validKeyPair.getPublic(),
 					"CN=Valid");
 			List<X509Certificate> validCertificateChain = Arrays
 					.asList(new X509Certificate[] { validCertificate, rootCert });
 
-			KeyPair revokedKeyPair = PKITestUtils.generateKeyPair();
+			KeyPair revokedKeyPair = new PKIBuilder.KeyPairBuilder().build();
 			X509Certificate revokedCertificate = certificationAuthority
 					.issueSigningCertificate(revokedKeyPair.getPublic(), "CN=Revoked");
 			certificationAuthority.revoke(revokedCertificate);
@@ -211,12 +206,11 @@ public class ScenarioTest {
 
 			trustValidator.isTrusted(validCertificateChain);
 
-			try {
+			TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 				trustValidator.isTrusted(revokedCertificationChain);
-				fail();
-			} catch (Exception e) {
-				// expected
-			}
+			});
+			LOGGER.debug("reason: {}", result.getReason());
+			assertEquals(TrustLinkerResultReason.INVALID_REVOCATION_STATUS, result.getReason());
 		}
 	}
 
@@ -230,13 +224,13 @@ public class ScenarioTest {
 
 			X509Certificate rootCert = certificationAuthority.getCertificate();
 
-			KeyPair validKeyPair = PKITestUtils.generateKeyPair();
+			KeyPair validKeyPair = new PKIBuilder.KeyPairBuilder().build();
 			X509Certificate validCertificate = certificationAuthority.issueSigningCertificate(validKeyPair.getPublic(),
 					"CN=Valid");
 			List<X509Certificate> validCertificateChain = Arrays
 					.asList(new X509Certificate[] { validCertificate, rootCert });
 
-			KeyPair revokedKeyPair = PKITestUtils.generateKeyPair();
+			KeyPair revokedKeyPair = new PKIBuilder.KeyPairBuilder().build();
 			X509Certificate revokedCertificate = certificationAuthority
 					.issueSigningCertificate(revokedKeyPair.getPublic(), "CN=Revoked");
 			certificationAuthority.revoke(revokedCertificate);
@@ -252,12 +246,11 @@ public class ScenarioTest {
 
 			trustValidator.isTrusted(validCertificateChain);
 
-			try {
+			TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 				trustValidator.isTrusted(revokedCertificationChain);
-				fail();
-			} catch (Exception e) {
-				// expected
-			}
+			});
+			LOGGER.debug("reason: {}", result.getReason());
+			assertEquals(TrustLinkerResultReason.INVALID_REVOCATION_STATUS, result.getReason());
 		}
 	}
 
@@ -270,13 +263,13 @@ public class ScenarioTest {
 
 			X509Certificate rootCert = certificationAuthority.getCertificate();
 
-			KeyPair validKeyPair = PKITestUtils.generateKeyPair();
+			KeyPair validKeyPair = new PKIBuilder.KeyPairBuilder().build();
 			X509Certificate validCertificate = certificationAuthority.issueSigningCertificate(validKeyPair.getPublic(),
 					"CN=Valid");
 			List<X509Certificate> validCertificateChain = Arrays
 					.asList(new X509Certificate[] { validCertificate, rootCert });
 
-			KeyPair proxyKeyPair = PKITestUtils.generateKeyPair();
+			KeyPair proxyKeyPair = new PKIBuilder.KeyPairBuilder().build();
 			LocalDateTime notBefore = LocalDateTime.now();
 			LocalDateTime notAfter = notBefore.plusMonths(1);
 			X509Certificate proxyCertificate = PKITestUtils.generateCertificate(proxyKeyPair.getPublic(), "CN=Proxy",
@@ -293,12 +286,11 @@ public class ScenarioTest {
 
 			trustValidator.isTrusted(validCertificateChain);
 
-			try {
+			TrustLinkerResultException result = Assertions.assertThrows(TrustLinkerResultException.class, () -> {
 				trustValidator.isTrusted(proxyCertificationChain);
-				fail();
-			} catch (Exception e) {
-				// expected
-			}
+			});
+			LOGGER.debug("reason: {}", result.getReason());
+			assertEquals(TrustLinkerResultReason.NO_TRUST, result.getReason());
 		}
 	}
 
@@ -386,7 +378,11 @@ public class ScenarioTest {
 			trustValidatorDecorator.addDefaultTrustLinkerConfig(trustValidator);
 
 			crlFailBehavior.setFailing(true);
-			assertThrows(TrustLinkerResultException.class, () -> trustValidator.isTrusted(certChain));
+			TrustLinkerResultException result = assertThrows(TrustLinkerResultException.class, () -> {
+				trustValidator.isTrusted(certChain);
+			});
+			LOGGER.debug("reason: {}", result.getReason());
+			assertEquals(TrustLinkerResultReason.NO_TRUST, result.getReason());
 		}
 	}
 
@@ -514,12 +510,11 @@ public class ScenarioTest {
 			trustValidator.isTrusted(Collections.singletonList(rootCert),
 					Date.from(clock.getTime().atZone(ZoneId.systemDefault()).toInstant()));
 
-			try {
+			TrustLinkerResultException result = assertThrows(TrustLinkerResultException.class, () -> {
 				trustValidator.isTrusted(Collections.singletonList(rootCert));
-				fail();
-			} catch (TrustLinkerResultException e) {
-				// expected
-			}
+			});
+			LOGGER.debug("reason: {}", result.getReason());
+			assertEquals(TrustLinkerResultReason.INVALID_VALIDITY_INTERVAL, result.getReason());
 		}
 	}
 
@@ -548,12 +543,11 @@ public class ScenarioTest {
 
 			trustValidator.isTrusted(certChain, Date.from(clock.getTime().atZone(ZoneId.systemDefault()).toInstant()));
 
-			try {
+			TrustLinkerResultException result = assertThrows(TrustLinkerResultException.class, () -> {
 				trustValidator.isTrusted(certChain);
-				fail();
-			} catch (TrustLinkerResultException e) {
-				// expected
-			}
+			});
+			LOGGER.debug("reason: {}", result.getReason());
+			assertEquals(TrustLinkerResultReason.INVALID_VALIDITY_INTERVAL, result.getReason());
 		}
 	}
 
@@ -582,13 +576,12 @@ public class ScenarioTest {
 
 			trustValidator.isTrusted(certChain, Date.from(clock.getTime().atZone(ZoneId.systemDefault()).toInstant()));
 
-			try {
+			TrustLinkerResultException result = assertThrows(TrustLinkerResultException.class, () -> {
 				LocalDateTime crlExpiredDateTime = clock.getTime().plusDays(2);
 				trustValidator.isTrusted(certChain, crlExpiredDateTime);
-				fail();
-			} catch (TrustLinkerResultException e) {
-				// expected
-			}
+			});
+			LOGGER.debug("reason: {}", result.getReason());
+			assertEquals(TrustLinkerResultReason.NO_TRUST, result.getReason());
 		}
 	}
 
@@ -617,14 +610,13 @@ public class ScenarioTest {
 
 			trustValidator.isTrusted(certChain, Date.from(clock.getTime().atZone(ZoneId.systemDefault()).toInstant()));
 
-			try {
+			TrustLinkerResultException result = assertThrows(TrustLinkerResultException.class, () -> {
 				LocalDateTime ocspExpiredDateTime = clock.getTime().plusDays(2);
 				trustValidator.isTrusted(certChain,
 						Date.from(ocspExpiredDateTime.atZone(ZoneId.systemDefault()).toInstant()));
-				fail();
-			} catch (TrustLinkerResultException e) {
-				// expected
-			}
+			});
+			LOGGER.debug("reason: {}", result.getReason());
+			assertEquals(TrustLinkerResultReason.NO_TRUST, result.getReason());
 		}
 	}
 
@@ -640,7 +632,7 @@ public class ScenarioTest {
 
 			world.start();
 
-			KeyPair keyPair = PKITestUtils.generateKeyPair();
+			KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 			X509Certificate certificate = certificationAuthority.issueSigningCertificate(keyPair.getPublic(),
 					"CN=End Entity");
 
@@ -662,12 +654,11 @@ public class ScenarioTest {
 
 			certificationAuthority.reissueCertificate("CN=CA");
 
-			try {
+			TrustLinkerResultException result = assertThrows(TrustLinkerResultException.class, () -> {
 				trustValidator.isTrusted(certChain);
-				fail();
-			} catch (TrustLinkerResultException e) {
-				// expected
-			}
+			});
+			LOGGER.debug("reason: {}", result.getReason());
+			assertEquals(TrustLinkerResultReason.NO_TRUST, result.getReason());
 		}
 	}
 
@@ -687,7 +678,7 @@ public class ScenarioTest {
 
 			world.start();
 
-			KeyPair keyPair = PKITestUtils.generateKeyPair();
+			KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 			X509Certificate certificate = certificationAuthority.issueSigningCertificate(keyPair.getPublic(),
 					"CN=End Entity");
 
@@ -725,7 +716,7 @@ public class ScenarioTest {
 
 			world.start();
 
-			KeyPair keyPair = PKITestUtils.generateKeyPair();
+			KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 			X509Certificate certificate = certificationAuthority.issueSigningCertificate(keyPair.getPublic(),
 					"CN=End Entity");
 
@@ -744,7 +735,10 @@ public class ScenarioTest {
 			trustValidatorDecorator.addDefaultTrustLinkerConfig(trustValidator);
 
 			ocspFailBehavior.setFailingClock(new FixedClock(LocalDateTime.now().plusHours(1)));
-			assertThrows(TrustLinkerResultException.class, () -> trustValidator.isTrusted(certChain));
+			TrustLinkerResultException result = assertThrows(TrustLinkerResultException.class,
+					() -> trustValidator.isTrusted(certChain));
+			LOGGER.debug("reason: {}", result.getReason());
+			assertEquals(TrustLinkerResultReason.NO_TRUST, result.getReason());
 		}
 	}
 
@@ -761,7 +755,7 @@ public class ScenarioTest {
 
 			world.start();
 
-			KeyPair keyPair = PKITestUtils.generateKeyPair();
+			KeyPair keyPair = new PKIBuilder.KeyPairBuilder().build();
 			X509Certificate certificate = certificationAuthority.issueSigningCertificate(keyPair.getPublic(),
 					"CN=End Entity");
 
@@ -784,12 +778,10 @@ public class ScenarioTest {
 			certificationAuthority.reissueCertificate("CN=CA");
 			ocspRevocationService.reissueCertificate("CN=OCSP Responder");
 
-			try {
-				trustValidator.isTrusted(certChain);
-				fail();
-			} catch (TrustLinkerResultException e) {
-				// expected
-			}
+			TrustLinkerResultException result = assertThrows(TrustLinkerResultException.class,
+					() -> trustValidator.isTrusted(certChain));
+			LOGGER.debug("reason: {}", result.getReason());
+			assertEquals(TrustLinkerResultReason.NO_TRUST, result.getReason());
 		}
 	}
 }
