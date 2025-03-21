@@ -32,7 +32,7 @@ The following is required for compiling the jTrust software:
 
 ## Build
 
-The project can be build via:
+The project can be built via:
 
 ```shell
 mvn clean install
