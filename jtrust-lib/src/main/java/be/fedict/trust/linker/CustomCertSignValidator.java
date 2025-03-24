@@ -62,16 +62,13 @@ public class CustomCertSignValidator {
         try {
             childCertificate.verify(certificate.getPublicKey());
         } catch (SignatureException e) {
-            if (e.getMessage().contains("Signature length not correct")) {
-                verifyWithPKCS1Padding(childCertificate, certificate);
-            } else {
-                throw e;
-            }
+            LOG.warn("Got signature exception.", e);
+            verifyWithPKCS1Padding(childCertificate, certificate, e);
         }
 
     }
 
-    public static void verifyWithPKCS1Padding(X509Certificate childCertificate, X509Certificate certificate) throws NoSuchAlgorithmException, InvalidKeyException, SignatureException, CertificateException, NoSuchProviderException {
+    public static void verifyWithPKCS1Padding(X509Certificate childCertificate, X509Certificate certificate, SignatureException e) throws NoSuchAlgorithmException, InvalidKeyException, SignatureException, CertificateException, NoSuchProviderException {
         LOG.debug("Signature length is not correct for childCertificate (" + childCertificate.getSubjectDN().getName() + "), and certificate (" + certificate.getSubjectDN().getName() + ").");
         String certificateSignatureAlgorithm = childCertificate.getSigAlgName();
         if (!certificateSignatureAlgorithm.contains("Encryption")) {
@@ -86,7 +83,7 @@ public class CustomCertSignValidator {
         final boolean verificationResult = signature.verify(childCertificate.getSignature());
 
         if (!verificationResult) {
-            throw new SignatureException("Signature does not match.");
+            throw new SignatureException("Signature does not match.", e);
         }
     }
 
