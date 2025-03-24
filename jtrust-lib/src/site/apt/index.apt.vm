@@ -22,7 +22,7 @@ Java X509 Certificate Trust Library
   
 +--
 <dependency>
-	<groupId>be.fedict.jtrust</groupId>
+	<groupId>be.corilus.jtrust</groupId>
 	<artifactId>jtrust-lib</artifactId>
 	<version>${project.version}</version>
 </dependency>

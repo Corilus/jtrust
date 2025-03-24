@@ -1,0 +1,40 @@
+steps:
+  - task: DownloadPipelineArtifact@2
+    displayName: 'Download NVD cache'
+    inputs:
+      buildType: 'specific'
+      project: 'fc526e4c-2e2a-47d3-94c5-07ffb53849a2'
+      definition: '1722'
+      buildVersionToDownload: 'latest'
+      artifactName: 'nvd_data'
+      targetPath: '$(Build.BinariesDirectory)/data'
+
+  - task: JavaToolInstaller@0
+    displayName: Switch to Java 11 for Dependency Check
+    inputs:
+      versionSpec: '11'
+      jdkArchitectureOption: 'x64'
+      jdkSourceOption: 'PreInstalled'
+
+  - task: dependency-check-build-task@6
+    displayName: 'Dependency Check'
+    inputs:
+      projectName: 'jtrust'
+      scanPath: '**/*.jar'
+      format: 'ALL'
+      additionalArguments: '--data $(Build.BinariesDirectory)/data --noupdate'
+      suppressionPath: 'dependency-check-suppressions.xml'
+      enableVerbose: true
+      failOnCVSS: '4'
+
+  - task: PublishHtmlReport@1
+    condition: always()
+    inputs:
+      reportDir: '$(Common.TestResultsDirectory)/dependency-check/dependency-check-report.html'
+
+  - task: JavaToolInstaller@0
+    displayName: Switch back to Java 8 for remaining tasks
+    inputs:
+      versionSpec: '8'
+      jdkArchitectureOption: 'x64'
+      jdkSourceOption: 'PreInstalled'

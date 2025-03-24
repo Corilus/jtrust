@@ -1,0 +1,54 @@
+name: $(Date:yyMMdd)$(Rev:rr)
+
+trigger:
+  batch: true
+  branches:
+    include:
+      - master
+
+stages:
+  - stage: build
+    jobs:
+      - job: build_java
+        displayName: Build
+        pool:
+          vmImage: 'ubuntu-latest'
+        variables:
+          MAVEN_CACHE_FOLDER: $(Pipeline.Workspace)/.m2/repository
+          MAVEN_OPTS: '-Dmaven.repo.local=$(MAVEN_CACHE_FOLDER) -Xmx2048m'
+        steps:
+          - checkout: self
+            persistCredentials: true
+            fetchDepth: 0
+
+          - task: Cache@2
+            displayName: Cache Maven local repo
+            inputs:
+              key: 'maven | 2 | "$(Agent.OS)" | **/pom.xml'
+              path: $(MAVEN_CACHE_FOLDER)
+              restoreKeys: |
+                maven | 2 | "$(Agent.OS)"
+
+          - template: templates/setup_build.yml
+
+          - task: Maven@4
+            displayName: Maven build
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: -B -U clean deploy -Dsha1=$(BuildRevision) -Dbuildtime.output.log=true
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+              javaHomeOption: 'JDKVersion'
+              mavenOptions: '$(MAVEN_OPTS)'
+              mavenVersionOption: 'Default'
+              mavenAuthenticateFeed: false
+              effectivePomSkip: false
+              sqMavenPluginVersionChoice: 'latest'
+
+          - template: templates/dependency_cve_check.yml
+
+          - task: BlueBasher.bluebasher-workitemupdater.bluebasher-workitemupdater.WorkItemUpdater@2
+            displayName: Set integrated in build on work items
+            inputs:
+              workItemType: 'Bug,User Story,Task'
+              updateFields: 'Microsoft.VSTS.Build.IntegrationBuild,$(Build.BuildNumber)'

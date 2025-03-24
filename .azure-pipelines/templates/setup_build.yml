@@ -1,0 +1,15 @@
+steps:
+  - task: MavenAuthenticate@0
+    displayName: Maven Authenticate
+    inputs:
+      artifactsFeeds: common-components-releases, commons-components-proxy
+
+  - script: 'sudo apt-get -yq install graphviz'
+    displayName: Install graphviz
+
+  - task: JavaToolInstaller@0
+    displayName: Configure Java version
+    inputs:
+      versionSpec: '8'
+      jdkArchitectureOption: 'x64'
+      jdkSourceOption: 'PreInstalled'

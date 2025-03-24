@@ -21,7 +21,7 @@ Test PKI Library
   
 +--
 <dependency>
-	<groupId>be.fedict.jtrust</groupId>
+	<groupId>be.corilus.jtrust</groupId>
 	<artifactId>jtrust-testpki</artifactId>
 	<version>${project.version}</version>
 </dependency>

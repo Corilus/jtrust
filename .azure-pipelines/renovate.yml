@@ -1,0 +1,21 @@
+resources:
+  repositories:
+    - repository: Shared
+      type: git
+      name: pipelines-shared-library
+
+name: $(TeamProject)_$(Build.DefinitionName)_$(SourceBranchName)_$(Date:yyyyMMdd).$(Rev:r)
+appendCommitMessageToRunName: false
+trigger: none
+schedules:
+  - cron: "0 0 * * *"
+    displayName: Daily midnight build
+    branches:
+      include:
+        - master
+    always: true
+
+extends:
+  template: templates/renovate.yml@Shared
+  parameters:
+    areaPath: CommonComponents

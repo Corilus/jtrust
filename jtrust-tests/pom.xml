@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 	<modelVersion>4.0.0</modelVersion>
-	<groupId>be.fedict.jtrust</groupId>
+	<groupId>be.corilus.jtrust</groupId>
 	<artifactId>jtrust-tests</artifactId>
 	<packaging>jar</packaging>
 	<parent>
-		<groupId>be.fedict</groupId>
+		<groupId>be.corilus</groupId>
 		<artifactId>jtrust</artifactId>
-		<version>2.0.19-SNAPSHOT</version>
+		<version>${revision}.${sha1}</version>
 	</parent>
 	<name>jTrust Tests</name>
 	<description>Integration tests</description>
@@ -40,18 +40,18 @@
 	</profiles>
 	<dependencies>
 		<dependency>
-			<groupId>be.fedict.jtrust</groupId>
+			<groupId>be.corilus.jtrust</groupId>
 			<artifactId>jtrust-lib</artifactId>
 			<version>${project.version}</version>
 		</dependency>
 		<dependency>
-			<groupId>be.fedict.jtrust</groupId>
+			<groupId>be.corilus.jtrust</groupId>
 			<artifactId>jtrust-lib</artifactId>
 			<version>${project.version}</version>
 			<type>test-jar</type>
 		</dependency>
 		<dependency>
-			<groupId>be.fedict.jtrust</groupId>
+			<groupId>be.corilus.jtrust</groupId>
 			<artifactId>jtrust-tsl</artifactId>
 			<version>${project.version}</version>
 		</dependency>
