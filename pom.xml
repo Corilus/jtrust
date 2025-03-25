@@ -217,9 +217,9 @@
 				<version>5.5</version>
 			</dependency>
 			<dependency>
-				<groupId>be.fedict.commons-eid</groupId>
+				<groupId>be.corilus.commons-eid</groupId>
 				<artifactId>commons-eid-bom</artifactId>
-				<version>1.0.2</version>
+				<version>1.0.4</version>
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
