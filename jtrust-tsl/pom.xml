@@ -5,7 +5,7 @@
 	<artifactId>jtrust-tsl</artifactId>
 	<packaging>jar</packaging>
 	<parent>
-		<groupId>be.corilus</groupId>
+		<groupId>be.corilus.jtrust</groupId>
 		<artifactId>jtrust</artifactId>
 		<version>${revision}.${sha1}</version>
 	</parent>
